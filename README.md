@@ -119,13 +119,9 @@ Exit codes: `0` ok, `1` error, `2` usage, `3` real values found in the output.
 
 ## Profiles
 
-A profile holds the options you rarely change. The first `-a` run creates **`default.yaml`**
+The first `-a` run creates **`default.yaml`**
 and uses it whenever `-p` is not given, with a yellow warning:
 
-```
-! no -p given: created and using the default profile ~/.config/log_anonimizer/profiles/default.yaml
-! no sensitive_terms in the profile: your organisation's names in URLs and text may stay visible
-```
 
 The default replaces everything and encrypts the map. **Add your organisation's names to
 `sensitive_terms`.** It is the one thing the tool cannot guess:
