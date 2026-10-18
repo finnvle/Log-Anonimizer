@@ -59,7 +59,7 @@ go build -o log_anonimizer ./cmd/log_anonimizer   # this machine
 ```
 
 `-a` and `-d` also take a folder (e.g. a KAPE triage). `-d` works on any text with tokens,
-such as a report you got back.
+such as a report you got back. Which files work: [Supported files](#supported-files).
 
 ### Windows (PowerShell)
 
@@ -192,6 +192,38 @@ USERS
   USER_0001  somchai.k     6×
 ```
 
+## Supported files
+
+Any text file works, with any extension or none: the tool looks at the content, not the name.
+Give `-a` a folder and it reads every file in it, subfolders included.
+
+| Log type | Typical files | Read by |
+|---|---|---|
+| Plain text, application logs | `.log`, `.txt`, `.out`, no extension | line |
+| Syslog (RFC 3164 / 5424) | `messages`, `secure`, `auth.log` | line; the host in the header becomes `HOST_…` |
+| CSV / TSV exports | `.csv`, `.tsv` | column name: LogRhythm, EvtxECmd (incl. `Payload`), `Computer`, `UserName`, `SourceIP`, … |
+| IIS / W3C | `u_ex*.log` | the `#Fields:` line (`c-ip`, `cs-username`, …) |
+| Windows event XML | `.xml` (e.g. `wevtutil qe … /f:xml`) | `<Computer>`, `<Data Name='TargetUserName'>`, … |
+| JSON, JSON lines | `.json`, `.jsonl`, `.ndjson` | key: `"user"`, `"host"`, `"src_ip"`, … |
+| key=value | firewall, CEF, Windows text exports | key: `src=`, `suser=`, `shost=`, `Account Name:`, … |
+
+IPs, e-mails, SIDs, MACs, user paths and your `sensitive_terms` are found in every type, wherever they appear.
+CSV keeps its quoting and line endings.
+
+**Encoding:** UTF-8 (with or without BOM) and UTF-16 (PowerShell and many Windows exports).
+UTF-16 files are written as UTF-8 with a BOM.
+
+**Binary files are not read.** A single binary file stops with an error. In a folder they are
+skipped, left out of the output and listed in `ANONYMIZATION_REPORT.txt`. Convert them first:
+
+| File | Convert with |
+|---|---|
+| `.evtx` | [EvtxECmd](https://ericzimmerman.github.io/) → CSV |
+| Registry hives (`NTUSER.DAT`, `SYSTEM`, …) | RECmd → CSV |
+| `$MFT`, `$J` | MFTECmd → CSV |
+| `.zip`, `.gz`, `.7z` | extract first |
+| `.xlsx` | save as CSV |
+
 ## What is replaced
 
 | | Example | Token |
@@ -204,11 +236,6 @@ USERS
 | MAC, device ID | `00:1a:2b:3c:4d:5e`, `DeviceId=…` | `MAC_0001`, `DEVICE_0001` |
 | Secret | `password=`, `token=`, `Authorization:`, cookies | `SECRET_0001` |
 | Sensitive term | `acme`, `ACMEDC01` | `ORG_0001`, `NAME_0001` |
-
-
-**Input:** text logs, CSV (LogRhythm, EvtxECmd, …), IIS W3C, Windows event XML, syslog,
-UTF-8/UTF-16, folders. Binary files (evtx, registry, `$MFT`) are skipped: convert them to CSV
-first with EvtxECmd / RECmd / MFTECmd.
 
 ## The map
 
