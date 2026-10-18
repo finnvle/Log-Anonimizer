@@ -113,7 +113,8 @@ For scripts only, where nobody can type, put it in the `LOGANON_PASSPHRASE` envi
 | `-show <map\|file\|folder>` | which token is which real value |
 | `-verify <file\|folder>` | check anonymized output; add `-m` to look for every known value |
 
-| Option | |
+
+| Optional | |
 |---|---|
 | `-o <path>` | output file or folder (default: next to the input) |
 | `-m <map>` | map to use; with `-a`, an existing map is extended (same tokens as before) |
