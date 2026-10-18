@@ -4,8 +4,7 @@ Replace IPs, hostnames, accounts, domains, e-mails, MACs, SIDs and secrets in lo
 (`HOST_0001`, `USER_0003`, `IP_0012`) before sharing them. Restore the real values later with
 the map file you keep.
 
-- One binary for Windows, Linux and macOS (amd64 / arm64). Nothing to install.
-- The same value always gets the same token, across files and runs.
+
 - The map is encrypted (AES-256-GCM + Argon2id).
 - Every run checks that no real value is left.
 
@@ -22,14 +21,11 @@ Build with [Go](https://go.dev/dl/) 1.26+:
 git clone https://github.com/finnvle/Log-Anonimizer.git
 cd Log-Anonimizer
 go build -o log_anonimizer ./cmd/log_anonimizer   # this machine
-./scripts/build.sh                                  # all platforms into dist/
+
+# Build for all platforms into dist/
+./scripts/build.sh                                 
 ```
 
-| `dist/` file | For |
-|---|---|
-| `*_windows_amd64.exe` / `*_windows_arm64.exe` | Windows 10/11, Server 2016+ |
-| `*_linux_amd64` / `*_linux_arm64` | any Linux |
-| `*_darwin_arm64` / `*_darwin_amd64` | macOS Apple Silicon / Intel |
 
 Rename the file to `log_anonimizer` (`log_anonimizer.exe` on Windows).
 
@@ -183,7 +179,6 @@ first with EvtxECmd / RECmd / MFTECmd.
 
 - Detection is heuristic: check the `verify` line and skim the output before sharing.
 - `DC01` and `dc01` share one token; `-d` restores the first spelling seen.
-- Speed on one core: 51 MB in ~11 s, a 1.5 GB KAPE triage in ~4 min.
 
 ## Development
 
@@ -192,4 +187,3 @@ go test ./...
 ./scripts/build.sh
 ```
 
-Never commit real logs: `Sample_Logs/` and `Simple_Logs/` are git-ignored.
