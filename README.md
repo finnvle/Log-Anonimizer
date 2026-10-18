@@ -127,12 +127,6 @@ For scripts only, where nobody can type, put it in the `LOGANON_PASSPHRASE` envi
 | `-version` | print the version |
 | `-h` | help |
 
-| Environment variable | |
-|---|---|
-| `LOGANON_PASSPHRASE` | map passphrase, for scripts |
-| `LOGANON_PROFILE_DIR` | folder for profiles (instead of the default below) |
-| `NO_COLOR` | no colours |
-
 Exit codes: `0` ok, `1` error, `2` usage, `3` real values found in the output.
 
 ## Profiles
