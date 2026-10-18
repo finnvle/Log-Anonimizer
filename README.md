@@ -145,8 +145,9 @@ anonymize:
   public_ip: false   # keep attackers' IPs as IOCs
 ```
 
-Save a copy per customer (`acme.yaml` next to `default.yaml`) and run with `-p acme`.
-`-print-profile` prints all options with comments; `-profiles` lists saved profiles.
+Save an individual profile and run with `-p acme.yaml`.
+
+You can run with `-print-profile` to prints all options with comments; `-profiles` lists saved profiles.
 
 Profile folder: `%AppData%\log_anonimizer\profiles` (Windows),
 `~/.config/log_anonimizer/profiles` (Linux), `~/Library/Application Support/log_anonimizer/profiles` (macOS).
