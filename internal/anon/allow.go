@@ -227,7 +227,8 @@ func (a *allowSet) user(u string) bool {
 	}
 	// IIS application pool identities, Windows virtual accounts
 	return strings.HasPrefix(u, ".net v") || strings.Contains(u, "apppool") ||
-		strings.HasPrefix(u, "dwm-") || strings.HasPrefix(u, "umfd-")
+		strings.HasPrefix(u, "dwm-") || strings.HasPrefix(u, "umfd-") ||
+		strings.HasPrefix(u, "healthmailbox") || strings.HasPrefix(u, "systemmailbox") // Exchange's own mailboxes
 }
 
 func (a *allowSet) host(h string) bool {

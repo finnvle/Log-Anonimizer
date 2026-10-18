@@ -115,6 +115,9 @@ func TestIsTokenStart(t *testing.T) {
 		{"USER_0001%40DOMAIN_0002", 12, true}, // after %40
 		{"a%4GDOMAIN_0002", 4, false},
 		{"S-1-5-21-SID_0001", 9, true},
+		{`1\r\nHOST_0001`, 5, true}, // escaped newline
+		{`x\tUSER_0001`, 3, true},
+		{`xnHOST_0001`, 2, false},
 	}
 	for _, c := range cases {
 		if got := IsTokenStart(c.s, c.i); got != c.want {

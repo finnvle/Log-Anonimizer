@@ -4,6 +4,7 @@ package anon
 
 import (
 	"net/netip"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -84,6 +85,8 @@ type Scanner struct {
 
 	// urlMode / uaMode are set while a URL or User-Agent field is scanned.
 	urlMode, uaMode bool
+	// escaped is set for text with \r\n, \t escapes written out.
+	escaped bool
 }
 
 // NewScanner creates a scanner for a profile and vault.
@@ -372,6 +375,7 @@ func (sc *Scanner) find(text string, useDict bool) []span {
 	if len(text) == 0 {
 		return nil
 	}
+	sc.escaped = strings.Contains(text, `\r\n`) || strings.Count(text, `\n`)+strings.Count(text, `\t`) >= 2
 	var c []span
 	if !sc.uaMode {
 		c = sc.kv.detect(sc, text, c)
@@ -657,6 +661,15 @@ func (sc *Scanner) userParts(v string) []part {
 	if ad, ok := parseIP(v); ok {
 		return sc.ipParts(v, ad)
 	}
+	if m := reSIDWhole.FindStringSubmatchIndex(v); m != nil { // "S-1-5-21-...-1105" in a user list
+		if !sc.p.Anonymize.SID {
+			return []part{lit(v)}
+		}
+		return []part{lit(v[:m[2]]), {text: v[m[2]:m[3]], kind: vault.SID}, lit(v[m[3]:])}
+	}
+	if strings.HasPrefix(strings.ToUpper(v), "S-1-") {
+		return []part{lit(v)} // a well-known SID such as S-1-5-18
+	}
 	if i := strings.IndexByte(v, '\\'); i > 0 {
 		j := i
 		for j < len(v) && v[j] == '\\' {
@@ -673,7 +686,7 @@ func (sc *Scanner) userParts(v string) []part {
 	}
 	for _, sep := range []string{"@", "%40"} {
 		if i := strings.LastIndex(v, sep); i > 0 && i+len(sep) < len(v) {
-			return sc.emailParts(v[:i], sep, v[i+len(sep):])
+			return sc.emailParts(v[:i], sep, v[i+len(sep):], true)
 		}
 	}
 	return sc.accountParts(v)
@@ -687,7 +700,11 @@ func (sc *Scanner) domainAccountParts(dom, sep, usr string) []part {
 	if dp == nil {
 		dp = []part{lit(dom)}
 	}
-	return append(append(dp, lit(sep)), sc.accountParts(usr)...)
+	up := sc.userParts(usr) // "corp%5Cjdoe%40acme.example": the user part is an e-mail
+	if up == nil {
+		up = []part{lit(usr)}
+	}
+	return append(append(dp, lit(sep)), up...)
 }
 
 // accountParts classifies a bare account name.
@@ -696,16 +713,24 @@ func (sc *Scanner) accountParts(u string) []part {
 	if strings.HasSuffix(u, "$") && len(u) > 1 { // machine account
 		return []part{sc.hostPart(u[:len(u)-1]), lit("$")}
 	}
-	if isNumeric(u) || (!sc.hasTerm(lu) && sc.allow.user(lu)) || !sc.p.Anonymize.User && !sc.hasTerm(lu) {
+	if isNumeric(u) || isGUID(u) || (!sc.hasTerm(lu) && sc.allow.user(lu)) || !sc.p.Anonymize.User && !sc.hasTerm(lu) {
 		return []part{lit(u)}
 	}
 	return []part{{text: u, kind: vault.User}}
 }
 
-func (sc *Scanner) emailParts(local, sep, domain string) []part {
+var reGUID = regexp.MustCompile(`^\{?[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\}?$`)
+
+// isGUID: object and mailbox GUIDs identify nobody outside the organisation.
+func isGUID(s string) bool { return len(s) >= 36 && reGUID.MatchString(s) }
+
+var reSIDWhole = regexp.MustCompile(`(?i)^S-1-5-21-(\d+-\d+-\d+)(?:-\d+)?$`)
+
+// emailParts classifies user@domain. learn records the domain as internal;
+// it is false inside URLs, where addresses are often attacker input.
+func (sc *Scanner) emailParts(local, sep, domain string, learn bool) []part {
 	ld := strings.ToLower(domain)
 	lp := sc.accountParts(local)
-	learn := true
 	if ad, ok := parseIP(local); ok {
 		// "http://203.0.113.9@evil.example" in an SSRF probe: not an account,
 		// so the domain is kept unless it is internal (an IOC)

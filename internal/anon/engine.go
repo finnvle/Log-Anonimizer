@@ -426,33 +426,35 @@ func (e *Engine) processText(r io.Reader, w *bufio.Writer) error {
 }
 
 func (e *Engine) processCSV(r io.Reader, w *bufio.Writer, comma rune) error {
-	br, peek := peekReader(r)
-	format := detectCSVFormat(peek, comma)
-	cr := newCSVReader(br, comma)
-	header, err := cr.Read()
+	cs := newCSVScanner(r, comma)
+	header, eol, err := cs.next()
 	if errors.Is(err, io.EOF) {
 		return nil
 	}
 	if err != nil {
 		return err
 	}
-	header = append([]string(nil), header...)
-	kinds := headerKinds(header)
+	names := make([]string, len(header))
+	for i, f := range header {
+		names[i] = f.val
+	}
+	kinds := headerKinds(names)
 	if w != nil {
-		if err := writeCSVRecord(w, format, header); err != nil {
+		if err := writeCSVFields(w, comma, header, eol); err != nil {
 			return err
 		}
 	}
 	sc := e.SC
 	for {
-		rec, err := cr.Read()
+		rec, eol, err := cs.next()
 		if errors.Is(err, io.EOF) {
 			return nil
 		}
 		if err != nil {
 			return err
 		}
-		for i, f := range rec {
+		for i := range rec {
+			f := rec[i].val
 			if f == "" {
 				continue
 			}
@@ -463,11 +465,11 @@ func (e *Engine) processCSV(r io.Reader, w *bufio.Writer, comma rune) error {
 			if w == nil {
 				sc.LearnField(f, k)
 			} else {
-				rec[i] = sc.ApplyField(f, k)
+				rec[i].val = sc.ApplyField(f, k)
 			}
 		}
 		if w != nil {
-			if err := writeCSVRecord(w, format, rec); err != nil {
+			if err := writeCSVFields(w, comma, rec, eol); err != nil {
 				return err
 			}
 		}

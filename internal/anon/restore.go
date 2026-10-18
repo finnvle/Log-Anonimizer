@@ -162,24 +162,22 @@ func writeRestored(src, dst string, enc textEncoding, asCSV bool, v *vault.Vault
 	return os.Rename(tmp, dst)
 }
 
-// restoreCSV writes fields with proper quoting, so originals that contain
-// quotes or commas cannot break the CSV structure.
+// restoreCSV keeps the original quoting; an original value that contains
+// a separator or a line break is quoted, so the CSV structure survives.
 func restoreCSV(r io.Reader, w *bufio.Writer, comma rune, v *vault.Vault, rep *RestoreReport) error {
-	br, peek := peekReader(r)
-	format := detectCSVFormat(peek, comma)
-	cr := newCSVReader(br, comma)
+	cs := newCSVScanner(r, comma)
 	for {
-		rec, err := cr.Read()
+		rec, eol, err := cs.next()
 		if errors.Is(err, io.EOF) {
 			return nil
 		}
 		if err != nil {
 			return err
 		}
-		for i, f := range rec {
-			rec[i] = RestoreString(f, v, rep)
+		for i := range rec {
+			rec[i].val = RestoreString(rec[i].val, v, rep)
 		}
-		if err := writeCSVRecord(w, format, rec); err != nil {
+		if err := writeCSVFields(w, comma, rec, eol); err != nil {
 			return err
 		}
 	}

@@ -1,8 +1,10 @@
 package anon
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/csv"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -446,5 +448,77 @@ func TestRestoreTokenFollowedByDigits(t *testing.T) {
 	}
 	if read(t, filepath.Join(dir, "r.log")) != read(t, in) {
 		t.Errorf("restore: %q", read(t, filepath.Join(dir, "r.log")))
+	}
+}
+
+func TestRoundTripEscapedText(t *testing.T) {
+	dir := t.TempDir()
+	in := write(t, filepath.Join(dir, "a.log"), "<Computer>DC01.corp.acme.example</Computer>\n"+
+		`<Data>DC03.corp.acme.example\tCDG 1\r\nDC02.corp.acme.example\tCDG 1\r\nncoc-2.corp.acme.example</Data>`+"\n")
+	v := vault.New()
+	rep := run(t, testProfile(), v, in, "")
+	if strings.Contains(read(t, rep.Output), "DC02") || strings.Contains(read(t, rep.Output), "ncoc") {
+		t.Fatalf("not anonymized: %q", read(t, rep.Output))
+	}
+	if _, err := Restore(rep.Output, filepath.Join(dir, "r.log"), v, false); err != nil {
+		t.Fatal(err)
+	}
+	if got := read(t, filepath.Join(dir, "r.log")); got != read(t, in) {
+		t.Errorf("round trip:\n got  %q\n want %q", got, read(t, in))
+	}
+}
+
+func TestCSVKeepsEmptyFieldStyle(t *testing.T) {
+	dir := t.TempDir()
+	for name, body := range map[string]string{
+		"bare.csv":   "\"Host\",\"Note\",\"X\"\r\n\"pc-01\",,\"a\"\r\n\"pc-02\",,\"\"\"q\"\"\"\r\n",
+		"quoted.csv": "\"Host\",\"Note\"\n\"pc-01\",\"\"\n\"pc-02\",\"\"\n",
+		"plain.csv":  "Host,Note\npc-01,\npc-02,x\n",
+	} {
+		in := write(t, filepath.Join(dir, name), body)
+		v := vault.New()
+		rep := run(t, testProfile(), v, in, "")
+		rr, err := Restore(rep.Output, "", v, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := read(t, rr.Output); got != body {
+			t.Errorf("%s: round trip changed the CSV\n got  %q\n want %q", name, got, body)
+		}
+	}
+}
+
+func TestCSVScanner(t *testing.T) {
+	in := "\"a\",1,,\"x \"\"q\"\" ,y\"\r\n\"multi\r\nline\",2,\"\",z\nlast,line,without,eol"
+	cs := newCSVScanner(strings.NewReader(in), ',')
+	type rec struct {
+		f   []csvField
+		eol string
+	}
+	want := []rec{
+		{[]csvField{{"a", true}, {"1", false}, {"", false}, {`x "q" ,y`, true}}, "\r\n"},
+		{[]csvField{{"multi\r\nline", true}, {"2", false}, {"", true}, {"z", false}}, "\n"},
+		{[]csvField{{"last", false}, {"line", false}, {"without", false}, {"eol", false}}, ""},
+	}
+	var out bytes.Buffer
+	w := bufio.NewWriter(&out)
+	for i, wr := range want {
+		got, eol, err := cs.next()
+		if err != nil || eol != wr.eol || len(got) != len(wr.f) {
+			t.Fatalf("record %d: %+v %q %v", i, got, eol, err)
+		}
+		for j := range got {
+			if got[j] != wr.f[j] {
+				t.Errorf("record %d field %d: %+v want %+v", i, j, got[j], wr.f[j])
+			}
+		}
+		writeCSVFields(w, ',', got, eol)
+	}
+	if _, _, err := cs.next(); err != io.EOF {
+		t.Errorf("want EOF, got %v", err)
+	}
+	w.Flush()
+	if out.String() != in {
+		t.Errorf("write back differs:\n got  %q\n want %q", out.String(), in)
 	}
 }

@@ -234,7 +234,8 @@ func TestInternalFQDN(t *testing.T) {
 
 func TestSensitiveTerms(t *testing.T) {
 	runCases(t, testProfile("acme"), []detCase{
-		{"words containing the term", "ACMEDC01 joined ACME-MBX1; rule Cyber_ACME_x; acme", "NAME_0001 joined NAME_0002; rule NAME_0003; ORG_0001"},
+		{"words containing the term", "ACMEDC01 joined ACME-MBX1; rule Cyber_ACME_x; acme", "NAME_0001 joined NAME_0002; rule Cyber_ORG_0001_x; ORG_0001"},
+		{"underscore separates names in VM files", "/vmfs/volumes/x/10.2.3.4_ACME-SRV01/10.2.3.4_ACME-SRV01.vmx", "/vmfs/volumes/x/IP_0001_HOST_0001/IP_0001_HOST_0001.vmx"},
 		{"term overrides the allow list", "rtt to acmemail.microsoft.com", "rtt to DOMAIN_0001"},
 		{"dotted term is an internal domain", "pc9.acme.co.th", "HOST_0001.DOMAIN_0001"},
 	})
@@ -291,4 +292,52 @@ func TestTogglesOff(t *testing.T) {
 	runCases(t, p, []detCase{
 		{"users and hosts kept, domain still hidden", "CORP\\jdoe on HOST=pc1", "DOMAIN_0001\\jdoe on HOST=pc1"},
 	})
+}
+
+func TestMapQualityFixes(t *testing.T) {
+	runCases(t, testProfile(), []detCase{
+		{"DOMAIN\\user@domain, URL-encoded", "Cmd=Ping&User=corp%5Cjdoe%40acme.example&x=1", "Cmd=Ping&User=DOMAIN_0001%5CUSER_0001%40DOMAIN_0002&x=1"},
+		{"secret with brackets is read whole", "PSVersion=5.1&sessionID=Version_15.1_(Build_2506.0)=AbCdEfGh12&x=1", "PSVersion=5.1&sessionID=SECRET_0001&x=1"},
+		{"systemd unit is not e-mail", "systemd[1]: user-runtime-dir@0.service: Succeeded.", "systemd[1]: user-runtime-dir@0.service: Succeeded."},
+		{"SID in a user list", "logonusers=S-1-5-21-1-2-3-1106,CORP\\bob1,S-1-5-18", "logonusers=S-1-5-21-SID_0001-1106,DOMAIN_0001\\USER_0001,S-1-5-18"},
+		{"Exchange health mailbox and probe kept", "User=HealthMailbox1234567890abcdef1234567890abcdef@corp.example&DeviceId=EASProbeDeviceId141&DeviceType=EASProbeDeviceType",
+			"User=HealthMailbox1234567890abcdef1234567890abcdef@DOMAIN_0001&DeviceId=EASProbeDeviceId141&DeviceType=EASProbeDeviceType"},
+		{"port before @ in a probe is not e-mail", "redirect_uri=https://localhost:80@oast.example", "redirect_uri=https://localhost:80@oast.example"},
+		{"e-mail domain in a URL is kept", "GET /login?next=http://x.y@evil.example/ 443", "GET /login?next=http://USER_0001@evil.example/ 443"},
+		{"mailbox GUID kept", "POST /mapi/emsmdb/ mailboxId=1a2b3c4d-1111-2222-3333-444455556666@acme.example", "POST /mapi/emsmdb/ mailboxId=1a2b3c4d-1111-2222-3333-444455556666@DOMAIN_0001"},
+	})
+	got, _ := anonLines(t, testProfile(),
+		"<Computer>DC01.corp.acme.example</Computer>",
+		`<Data>DC03.corp.acme.example\tCDG 1 7\r\nDC02.corp.acme.example\tCDG 1 7</Data>`,
+		"url=https%3A%2F%2Fmail.corp.acme.example%2Fowa%2F",
+		"/vmfs/volumes/x/10.2.3.4_kpi.corp.acme.example/10.2.3.4_kpi.corp.acme.example-flat.vmdk and kpi.corp.acme.example.vmx",
+	)
+	want := []string{
+		"<Computer>HOST_0001.DOMAIN_0001</Computer>",
+		`<Data>HOST_0002.DOMAIN_0001\tCDG 1 7\r\nHOST_0003.DOMAIN_0001\tCDG 1 7</Data>`,
+		"url=https%3A%2F%2Fmail.DOMAIN_0001%2Fowa%2F",
+		"/vmfs/volumes/x/IP_0001_HOST_0004.DOMAIN_0001/IP_0001_HOST_0004.DOMAIN_0001-flat.vmdk and HOST_0004.DOMAIN_0001.vmx",
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("line %d\n got:  %q\n want: %q", i, got[i], want[i])
+		}
+	}
+}
+
+func TestRegistrable(t *testing.T) {
+	for in, want := range map[string]string{
+		"mail.corp.example.com": "example.com",
+		"www.agency.go.th":      "agency.go.th",
+		"x.y.example.co.uk":     "example.co.uk",
+		"output.go":             "", // Go source file, not a domain
+		"jquery.min.js":         "",
+		"iorm.sf":               "",
+		"backup.tar.gz":         "",
+	} {
+		got, ok := registrable(in)
+		if want == "" && ok || want != "" && got != want {
+			t.Errorf("registrable(%q) = %q %v, want %q", in, got, ok, want)
+		}
+	}
 }

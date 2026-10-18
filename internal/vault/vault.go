@@ -248,10 +248,14 @@ func (v *Vault) Resolve(match string) (Entry, int, bool) {
 
 // IsTokenStart reports whether a token match starting at i is a real token
 // boundary: the previous byte is not alphanumeric, or it closes a
-// percent-encoded byte such as the "%40" in "USER_0001%40DOMAIN_0002".
+// percent-encoded byte such as the "%40" in "USER_0001%40DOMAIN_0002", or
+// an escape such as the "\n" in "\r\nHOST_0001".
 func IsTokenStart(s string, i int) bool {
 	if i == 0 || !isAlnum(s[i-1]) {
 		return true
+	}
+	if i >= 2 && s[i-2] == '\\' && (s[i-1] == 'n' || s[i-1] == 'r' || s[i-1] == 't') {
+		return true // after an escape written out, as in "\r\nHOST_0001"
 	}
 	return i >= 3 && s[i-3] == '%' && isHex(s[i-2]) && isHex(s[i-1])
 }

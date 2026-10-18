@@ -274,14 +274,36 @@ func (sc *Scanner) detectEmail(t string, out []span) []span {
 			s += 2
 		}
 		local, sep, dom := t[s:m[2]], t[m[2]:m[3]], t[m[4]:m[5]]
+		if systemdUnits[strings.ToLower(dom[strings.LastIndexByte(dom, '.')+1:])] {
+			continue // "user-runtime-dir@0.service"
+		}
 		if botContact(t, s, local) {
 			continue // "(compatible; ExampleBot/1.0; +bot@example.com)"
 		}
-		if ps := sc.emailParts(local, sep, dom); ps != nil {
+		if isDigits(local) {
+			continue // "https://localhost:80@oast.me": a port, not an account
+		}
+		// inside a URL the domain is often attacker input: keep it unless known
+		learn := !sc.urlMode && !urlContext(t, s)
+		if ps := sc.emailParts(local, sep, dom, learn); ps != nil {
 			out = append(out, span{s, e, ps, prioStructure})
 		}
 	}
 	return out
+}
+
+var systemdUnits = map[string]bool{
+	"service": true, "socket": true, "target": true, "timer": true, "mount": true, "slice": true,
+	"scope": true, "path": true, "device": true, "swap": true, "automount": true,
+}
+
+func isDigits(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if !isDigit(s[i]) {
+			return false
+		}
+	}
+	return s != ""
 }
 
 // botContact reports the contact address of a crawler in a User-Agent.
@@ -634,6 +656,12 @@ func (d *kvDetector) detect(sc *Scanner, t string, out []span) []span {
 					if c == '\r' || c == '\n' || c == '"' {
 						break
 					}
+				} else if kind == kvSecret {
+					// "sessionID=Version_15.1_(Build_2506.0)=AbCd...": brackets belong to the value
+					if c == ' ' || c == '\t' || c == '\r' || c == '\n' || c == '&' || c == ';' || c == '|' ||
+						c == '"' || c == '\'' || c == ',' {
+						break
+					}
 				} else if c == ' ' || c == '\t' || c == '\r' || c == '\n' || c == '&' || c == ';' || c == '|' ||
 					c == '"' || c == '\'' || c == '<' || c == '>' || c == ')' || c == ']' || c == '}' ||
 					c == ',' && kind != kvUserList {
@@ -677,7 +705,8 @@ func (d *kvDetector) detect(sc *Scanner, t string, out []span) []span {
 				out = append(out, span{vs, ve, []part{{text: val, kind: vault.Secret}}, prioContext})
 			}
 		case kvDevice:
-			if sc.p.Anonymize.DeviceID && len(val) >= 4 {
+			// EASProbeDeviceId...: Exchange's own health check, not a phone
+			if sc.p.Anonymize.DeviceID && len(val) >= 4 && !strings.HasPrefix(strings.ToLower(val), "easprobe") {
 				out = append(out, span{vs, ve, []part{{text: val, kind: vault.Device}}, prioContext})
 			}
 		}
@@ -800,6 +829,87 @@ func (sc *Scanner) detectSyslog(t string, out []span) []span {
 
 func isFQDNChar(c byte) bool { return isAlnum(c) || c == '.' || c == '-' }
 
+// escapeLetter reports that t[s] is the letter of an escape such as \n.
+func escapeLetter(t string, s int) bool {
+	return s >= 1 && s < len(t) && t[s-1] == '\\' && (t[s] == 'n' || t[s] == 'r' || t[s] == 't')
+}
+
+// fileExts are extensions that end a file name rather than a domain.
+var fileExts = map[string]bool{
+	"vmx": true, "vmdk": true, "vmsd": true, "vmxf": true, "nvram": true, "vswp": true, "vmss": true,
+	"vmsn": true, "vmem": true, "log": true, "txt": true, "csv": true, "xml": true, "json": true,
+	"bak": true, "old": true, "tmp": true, "zip": true, "7z": true, "gz": true, "tar": true,
+	"rar": true, "exe": true, "dll": true, "sys": true, "msi": true, "bat": true, "cmd": true,
+	"ps1": true, "vbs": true, "lnk": true, "pf": true, "evtx": true, "etl": true, "dat": true,
+	"db": true, "ini": true, "cfg": true, "conf": true, "config": true, "pdf": true, "doc": true,
+	"docx": true, "xls": true, "xlsx": true, "ppt": true, "pptx": true, "jpg": true, "png": true,
+	"html": true, "htm": true, "aspx": true, "asmx": true, "php": true, "js": true, "css": true,
+	"iso": true, "ova": true, "ovf": true, "pem": true, "crt": true, "cer": true, "pfx": true, "key": true,
+}
+
+// knownDomainCut finds a known internal domain inside a dotted word that
+// goes on as a file name ("kpi.corp.example-flat.vmdk", "pc1.corp.example.vmx")
+// and returns where the domain ends, or 0.
+func (sc *Scanner) knownDomainCut(lw string) int {
+	best := 0
+	for d := range sc.knownDomains {
+		if !strings.Contains(d, ".") {
+			continue
+		}
+		for from := 0; ; {
+			i := strings.Index(lw[from:], d)
+			if i < 0 {
+				break
+			}
+			i += from
+			end := i + len(d)
+			from = i + 1
+			if i > 0 && lw[i-1] != '.' || end >= len(lw) {
+				continue
+			}
+			switch c := lw[end]; {
+			case c == '-' || c == '_':
+			case c == '.' && fileExts[strings.SplitN(lw[end+1:], ".", 2)[0]]:
+			default:
+				continue
+			}
+			if end > best {
+				best = end
+			}
+		}
+	}
+	return best
+}
+
+// fqdnParts classifies a dotted word that may carry a file-name tail.
+func (sc *Scanner) fqdnParts(w string) []part {
+	lw := strings.ToLower(w)
+	if cut := sc.knownDomainCut(lw); cut > 0 {
+		if ps := sc.hostParts(w[:cut], false); ps != nil && !allLiteral(ps) {
+			return append(ps, lit(w[cut:]))
+		}
+	}
+	if i := strings.LastIndexByte(w, '.'); i > 0 && fileExts[lw[i+1:]] {
+		head := w[:i]
+		var ps []part
+		if strings.Contains(head, ".") {
+			ps = sc.fqdnParts(head)
+		} else if sc.hasTerm(strings.ToLower(head)) || sc.dictKnown(head) {
+			ps = []part{sc.hostPart(head)}
+		}
+		if ps != nil && !allLiteral(ps) {
+			return append(ps, lit(w[i:]))
+		}
+	}
+	return sc.hostParts(w, false)
+}
+
+// dictKnown reports a value that is already in the map.
+func (sc *Scanner) dictKnown(s string) bool {
+	_, ok := sc.v.Find(vault.Host, s)
+	return ok
+}
+
 // validFQDN checks labels: 1-63 characters, no leading or trailing hyphen.
 func validFQDN(v string) bool {
 	if !strings.Contains(v, ".") {
@@ -827,8 +937,11 @@ func (sc *Scanner) detectFQDN(t string, out []span) []span {
 			i++
 		}
 		e := i
-		if s > 0 && t[s-1] == '_' || e < len(t) && t[e] == '_' {
-			continue
+		if s >= 1 && t[s-1] == '%' && e-s > 2 && isHex(t[s]) && isHex(t[s+1]) {
+			s += 2 // "%2F%2Fmail.example.com": skip the encoded byte
+		}
+		if sc.escaped && escapeLetter(t, s) {
+			s++ // "\r\nDC02.corp.example": skip the escape letter
 		}
 		for s < e && (t[s] == '.' || t[s] == '-') {
 			s++
@@ -840,13 +953,13 @@ func (sc *Scanner) detectFQDN(t string, out []span) []span {
 		if !validFQDN(v) || allDigitLabels(v) {
 			continue
 		}
-		if !sc.internalDomain(v) {
+		if !sc.internalDomain(v) && sc.knownDomainCut(strings.ToLower(v)) == 0 {
 			if sc.KeptDomains != nil {
 				sc.countKept(v)
 			}
 			continue
 		}
-		if ps := sc.hostParts(v, false); ps != nil {
+		if ps := sc.fqdnParts(v); ps != nil && !allLiteral(ps) {
 			out = append(out, span{s, e, ps, prioFQDN})
 		}
 	}
@@ -857,6 +970,20 @@ var commonTLDs = map[string]bool{
 	"com": true, "net": true, "org": true, "edu": true, "gov": true, "mil": true, "int": true,
 	"info": true, "biz": true, "io": true, "app": true, "dev": true, "cloud": true, "online": true,
 	"site": true, "xyz": true, "top": true, "tech": true, "ai": true, "asia": true, "name": true,
+}
+
+var ccTLDs = map[string]bool{}
+
+func init() {
+	for _, c := range strings.Fields(`ac ad ae af ag ai al am ao aq ar as at au aw ax az ba bb bd be bf bg bh bi bj bm bn
+		bo br bs bt bw by bz ca cc cd cf cg ch ci ck cl cm cn co cr cu cv cw cx cy cz de dj dk dm do dz ec ee eg er
+		es et eu fi fj fk fm fo fr ga gd ge gf gg gh gi gl gm gn gp gq gr gs gt gu gw gy hk hm hn hr ht hu id ie il
+		im in io iq ir is it je jm jo jp ke kg kh ki km kn kp kr kw ky kz la lb lc li lk lr ls lt lu lv ly ma mc md
+		me mg mh mk ml mm mn mo mp mq mr ms mt mu mv mw mx my mz na nc ne nf ng ni nl no np nr nu nz om pa pe pf pg
+		ph pk pl pm pn pr ps pt pw py qa re ro rs ru rw sa sb sc sd se sg sh si sk sl sm sn so sr ss st su sv sx sy
+		sz tc td tf tg th tj tk tl tm tn to tr tt tv tw tz ua ug uk us uy uz va vc ve vg vi vn vu wf ws ye yt za zm zw`) {
+		ccTLDs[c] = true
+	}
 }
 
 // two-letter file extensions that are not worth reporting as domains
@@ -876,7 +1003,7 @@ func registrable(d string) (string, bool) {
 	labels := strings.Split(strings.ToLower(d), ".")
 	n := len(labels)
 	tld := labels[n-1]
-	if fileExtensions[tld] || !commonTLDs[tld] && !(len(tld) == 2 && hasLetterTLD("x."+tld)) {
+	if fileExtensions[tld] || !commonTLDs[tld] && !ccTLDs[tld] {
 		return "", false // most likely a file name: report.log, default.aspx
 	}
 	if n >= 3 && len(tld) == 2 && secondLevels[labels[n-2]] {
@@ -895,7 +1022,9 @@ func (sc *Scanner) countKept(v string) {
 
 // --- sensitive terms ------------------------------------------------------------
 
-func isWordChar(c byte) bool { return isAlnum(c) || c == '_' || c == '.' || c == '-' }
+// isWordChar: the characters a word with a sensitive term grows over. Not
+// '_', which joins separate names ("10.1.2.3_ACME-SRV01", "Cyber_ACME_rule").
+func isWordChar(c byte) bool { return isAlnum(c) || c == '.' || c == '-' }
 
 func (sc *Scanner) detectTerms(t string, out []span) []span {
 	if len(sc.terms) == 0 {
@@ -911,6 +1040,9 @@ func (sc *Scanner) detectTerms(t string, out []span) []span {
 		for s > 0 && isWordChar(t[s-1]) {
 			if s >= 3 && t[s-3] == '%' && isHex(t[s-2]) && isHex(t[s-1]) {
 				break
+			}
+			if escapeLetter(t, s-1) {
+				break // "\nACMEDC02"
 			}
 			s--
 		}
@@ -934,7 +1066,7 @@ func (sc *Scanner) detectTerms(t string, out []span) []span {
 		case sc.termSet[lw]:
 			ps = []part{{text: w, kind: vault.Org}}
 		case strings.Contains(w, "."):
-			if ps = sc.hostParts(w, false); ps == nil || allLiteral(ps) {
+			if ps = sc.fqdnParts(w); ps == nil || allLiteral(ps) {
 				ps = []part{{text: w, kind: vault.Domain}}
 			}
 		default:
@@ -999,15 +1131,17 @@ func (sc *Scanner) dictPatterns() ([]string, []vault.Kind) {
 // dictBoundary: a learned value must not be part of a longer word. For
 // names of 6+ characters a change between letter and digit also counts as
 // a boundary, so "SRV-FILE-APP20220721.log" still hides "SRV-FILE-APP".
+// The letter/digit change counts only at the end ("SRV-APP" + "2022").
 // An underscore is a boundary only for distinctive values (with a digit,
 // '-' or '.'): "BSID_Site_SRV-APP01" hides SRV-APP01, "Cyber_team_rule" keeps
 // the plain word "cyber".
 func dictBoundary(t string, s, e int, k vault.Kind) bool {
 	relaxed := e-s >= 6 && (k == vault.Host || k == vault.Org || k == vault.Name || k == vault.Domain)
 	underscore := strings.ContainsAny(t[s:e], "0123456789-.")
-	if s > 0 {
-		c := t[s-1]
-		if c == '_' && !underscore || isAlnum(c) && !(relaxed && isDigit(c) != isDigit(t[s])) {
+	if s > 0 && !escapeLetter(t, s-1) {
+		// no relaxing at the start: a token right after a letter or digit
+		// could not be found again by -d
+		if c := t[s-1]; c == '_' && !underscore || isAlnum(c) {
 			return false
 		}
 	}

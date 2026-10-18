@@ -3,14 +3,12 @@ package anon
 import (
 	"bufio"
 	"bytes"
-	"encoding/csv"
 	"errors"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"unicode/utf16"
-	"unicode/utf8"
 )
 
 type fileType int
@@ -183,57 +181,126 @@ func eachLine(r io.Reader, fn func(body, eol string) error) error {
 	}
 }
 
-// csvFormat is what a CSV writer needs to reproduce the input's look.
-type csvFormat struct {
-	comma    rune
-	quoteAll bool
-	eol      string
+// csvField is one CSV value and whether it was written in quotes, so the
+// output can be written exactly the way the input was.
+type csvField struct {
+	val    string
+	quoted bool
 }
 
-func detectCSVFormat(peek []byte, comma rune) csvFormat {
-	f := csvFormat{comma: comma, eol: "\n"}
-	f.quoteAll = len(peek) > 0 && peek[0] == '"'
-	if i := bytes.IndexByte(peek, '\n'); i > 0 && peek[i-1] == '\r' {
-		f.eol = "\r\n"
+// csvScanner is a lenient CSV reader that remembers quoting and line
+// endings (encoding/csv forgets both): LogRhythm, for example, quotes text
+// but leaves numbers and empty values bare.
+type csvScanner struct {
+	r     *bufio.Reader
+	comma byte
+}
+
+func newCSVScanner(r io.Reader, comma rune) *csvScanner {
+	br, ok := r.(*bufio.Reader)
+	if !ok {
+		br = bufio.NewReaderSize(r, 1<<20)
 	}
-	return f
+	return &csvScanner{r: br, comma: byte(comma)}
 }
 
-func newCSVReader(r io.Reader, comma rune) *csv.Reader {
-	cr := csv.NewReader(r)
-	cr.Comma = comma
-	cr.LazyQuotes = true
-	cr.FieldsPerRecord = -1
-	cr.ReuseRecord = true
-	return cr
-}
-
-func writeCSVRecord(w *bufio.Writer, f csvFormat, rec []string) error {
-	for i, field := range rec {
-		if i > 0 {
-			w.WriteRune(f.comma)
+// next returns one record and its line ending ("" for a last line without
+// one), or io.EOF when nothing is left.
+func (c *csvScanner) next() ([]csvField, string, error) {
+	var rec []csvField
+	for {
+		f, end, err := c.field()
+		if err != nil {
+			if errors.Is(err, io.EOF) && len(rec) == 0 {
+				return nil, "", io.EOF
+			}
+			if !errors.Is(err, io.EOF) {
+				return nil, "", err
+			}
 		}
-		if f.quoteAll || needsQuote(field, f.comma) {
+		rec = append(rec, f)
+		if end != "," {
+			return rec, end, nil
+		}
+	}
+}
+
+// field reads one value and what ended it: "," for the separator, the line
+// ending, or "" at the end of the input.
+func (c *csvScanner) field() (csvField, string, error) {
+	var b []byte
+	ch, err := c.r.ReadByte()
+	if err != nil {
+		return csvField{}, "", err
+	}
+	if ch == '"' {
+		for {
+			if ch, err = c.r.ReadByte(); err != nil {
+				return csvField{string(b), true}, "", nil // unterminated: keep what is there
+			}
+			if ch != '"' {
+				b = append(b, ch)
+				continue
+			}
+			nx, err := c.r.ReadByte()
+			if err != nil {
+				return csvField{string(b), true}, "", nil
+			}
+			switch {
+			case nx == '"':
+				b = append(b, '"')
+			case nx == c.comma:
+				return csvField{string(b), true}, ",", nil
+			case nx == '\n':
+				return csvField{string(b), true}, "\n", nil
+			case nx == '\r' && c.peekLF():
+				c.r.ReadByte()
+				return csvField{string(b), true}, "\r\n", nil
+			default: // a stray quote inside a quoted value
+				b = append(b, '"', nx)
+			}
+		}
+	}
+	for {
+		switch {
+		case ch == c.comma:
+			return csvField{string(b), false}, ",", nil
+		case ch == '\n':
+			return csvField{string(b), false}, "\n", nil
+		case ch == '\r' && c.peekLF():
+			c.r.ReadByte()
+			return csvField{string(b), false}, "\r\n", nil
+		default:
+			b = append(b, ch)
+		}
+		if ch, err = c.r.ReadByte(); err != nil {
+			return csvField{string(b), false}, "", nil
+		}
+	}
+}
+
+func (c *csvScanner) peekLF() bool {
+	p, _ := c.r.Peek(1)
+	return len(p) == 1 && p[0] == '\n'
+}
+
+// writeCSVFields writes a record with the original quoting. A value that
+// now contains the separator or a line break is quoted even if it was not.
+func writeCSVFields(w *bufio.Writer, comma rune, rec []csvField, eol string) error {
+	for i, f := range rec {
+		if i > 0 {
+			w.WriteRune(comma)
+		}
+		if f.quoted || strings.ContainsRune(f.val, comma) || strings.ContainsAny(f.val, "\r\n") {
 			w.WriteByte('"')
-			w.WriteString(strings.ReplaceAll(field, `"`, `""`))
+			w.WriteString(strings.ReplaceAll(f.val, `"`, `""`))
 			w.WriteByte('"')
 		} else {
-			w.WriteString(field)
+			w.WriteString(f.val)
 		}
 	}
-	_, err := w.WriteString(f.eol)
+	_, err := w.WriteString(eol)
 	return err
-}
-
-func needsQuote(s string, comma rune) bool {
-	if s == "" {
-		return false
-	}
-	if strings.ContainsRune(s, comma) || strings.ContainsAny(s, "\"\r\n") {
-		return true
-	}
-	r, _ := utf8.DecodeRuneInString(s)
-	return r == ' ' || r == '\t'
 }
 
 func csvComma(path string) rune {
@@ -241,16 +308,6 @@ func csvComma(path string) rune {
 		return '\t'
 	}
 	return ','
-}
-
-// peekFile returns the first bytes of a reader without consuming them.
-func peekReader(r io.Reader) (*bufio.Reader, []byte) {
-	br, ok := r.(*bufio.Reader)
-	if !ok {
-		br = bufio.NewReaderSize(r, 1<<20)
-	}
-	p, _ := br.Peek(64 * 1024)
-	return br, p
 }
 
 // --- column meaning from CSV headers and W3C #Fields --------------------------
