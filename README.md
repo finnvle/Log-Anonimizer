@@ -107,7 +107,6 @@ For scripts only, where nobody can type, put it in the `LOGANON_PASSPHRASE` envi
 
 | Command | |
 |---|---|
-| *(nothing)* or `-i` | TUI wizard |
 | `-a <file\|folder>` | anonymize |
 | `-d <file\|folder>` | restore the real values (uses the map next to it, or `-m`) |
 | `-show <map\|file\|folder>` | which token is which real value |
