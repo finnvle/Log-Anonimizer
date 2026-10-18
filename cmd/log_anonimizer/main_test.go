@@ -201,3 +201,25 @@ func TestDefaultProfileWarning(t *testing.T) {
 		t.Errorf("with -p and terms there is nothing to warn about: %+v", r)
 	}
 }
+
+func TestPassphraseAskedAgain(t *testing.T) {
+	in := logFile(t)
+	if r := cli(t, pass, "-a", in, "-q"); r.code != 0 {
+		t.Fatal(r)
+	}
+	answers := []string{"", "wrong passphrase", "correct horse battery"}
+	var out, errb bytes.Buffer
+	e := &env{stdout: &out, stderr: &errb, getenv: func(string) string { return "" },
+		prompt: func(string) ([]byte, error) {
+			a := answers[0]
+			answers = answers[1:]
+			return []byte(a), nil
+		}}
+	if code := run([]string{"-d", filepath.Join(filepath.Dir(in), "auth.anon.log")}, e); code != 0 {
+		t.Fatalf("exit %d: %s", code, errb.String())
+	}
+	if !strings.Contains(errb.String(), "! empty passphrase: type the one you chose when the map was made, try again (2 tries left)") ||
+		!strings.Contains(errb.String(), "! wrong passphrase, try again (last try)") {
+		t.Errorf("stderr:\n%s", errb.String())
+	}
+}

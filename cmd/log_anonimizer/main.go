@@ -216,7 +216,7 @@ func run(args []string, e *env) int {
 		return exitOK
 	}
 
-	pass := app.Passphrases{Env: e.getenv(app.PassEnv), Prompt: e.prompt}
+	pass := app.Passphrases{Env: e.getenv(app.PassEnv), Prompt: e.prompt, Notice: func(msg string) { warn(e, msg) }}
 	var progress io.Writer = e.stderr
 	st := &statusLine{w: e.stderr}
 	if e.color {

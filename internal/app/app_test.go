@@ -52,20 +52,104 @@ func TestAnonymizeEncryptedThenRestore(t *testing.T) {
 	}
 }
 
-func TestPassphraseRules(t *testing.T) {
+// scripted answers the prompts in order and records the notices.
+type scripted struct {
+	answers []string
+	asked   []string
+	notices []string
+}
+
+func (s *scripted) pass() Passphrases {
+	return Passphrases{
+		Prompt: func(p string) ([]byte, error) {
+			s.asked = append(s.asked, p)
+			if len(s.answers) == 0 {
+				return nil, errors.New("no more answers")
+			}
+			a := s.answers[0]
+			s.answers = s.answers[1:]
+			return []byte(a), nil
+		},
+		Notice: func(m string) { s.notices = append(s.notices, m) },
+	}
+}
+
+func TestNewPassphraseRetries(t *testing.T) {
+	cases := []struct {
+		name    string
+		answers []string
+		want    string // passphrase, or "" for an error
+		errHas  string
+		notices []string
+	}{
+		{"first try", []string{"long enough 1", "long enough 1"}, "long enough 1", "", nil},
+		{"empty then ok", []string{"", "long enough 1", "long enough 1"}, "long enough 1", "",
+			[]string{"empty passphrase: the map needs one to stay private (or run with -no-encrypt), try again (2 tries left)"}},
+		{"short then mismatch then ok", []string{"short", "long enough 1", "typo typo 1", "long enough 1", "long enough 1"}, "long enough 1", "",
+			[]string{"too short: use at least 8 characters, try again (2 tries left)", "the two passphrases do not match, try again (last try)"}},
+		{"three empties give up", []string{"", "", ""}, "", "empty passphrase", []string{"", ""}},
+		{"three mismatches give up", []string{"aaaaaaaa", "b", "aaaaaaaa", "c", "aaaaaaaa", "d"}, "", "do not match", []string{"", ""}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			sc := &scripted{answers: c.answers}
+			got, err := sc.pass().New()
+			if c.want != "" && (err != nil || string(got) != c.want) {
+				t.Errorf("got %q, %v", got, err)
+			}
+			if c.errHas != "" && (err == nil || !strings.Contains(err.Error(), c.errHas)) {
+				t.Errorf("err = %v, want %q", err, c.errHas)
+			}
+			if len(sc.notices) != len(c.notices) {
+				t.Fatalf("notices %q", sc.notices)
+			}
+			for i, n := range c.notices {
+				if n != "" && sc.notices[i] != n {
+					t.Errorf("notice %d = %q\nwant %q", i, sc.notices[i], n)
+				}
+			}
+		})
+	}
 	if _, err := (Passphrases{Env: "short"}).New(); err == nil {
 		t.Error("short env passphrase accepted")
 	}
 	if _, err := (Passphrases{}).New(); err == nil || !strings.Contains(err.Error(), "-no-encrypt") {
 		t.Errorf("no prompt, no env: %v", err)
 	}
-	answers := []string{"first pass 1", "other pass 2"}
-	p := Passphrases{Prompt: func(string) ([]byte, error) { a := answers[0]; answers = answers[1:]; return []byte(a), nil }}
-	if _, err := p.New(); err == nil || !strings.Contains(err.Error(), "do not match") {
-		t.Errorf("mismatch: %v", err)
-	}
 	if _, err := (Passphrases{}).Existing(); !errors.Is(err, vault.ErrNeedPassphrase) {
 		t.Errorf("existing without source: %v", err)
+	}
+}
+
+func TestOpenMapRetries(t *testing.T) {
+	dir := t.TempDir()
+	mp := filepath.Join(dir, "m.anonmap")
+	v := vault.New()
+	v.Token(vault.Host, "pc-1")
+	if err := vault.Save(mp, v, []byte("right pass 1")); err != nil {
+		t.Fatal(err)
+	}
+	sc := &scripted{answers: []string{"", "wrong pass", "right pass 1"}}
+	got, err := LoadMap(mp, sc.pass())
+	if err != nil || got.Len() != 1 {
+		t.Fatalf("empty, wrong, right: %v", err)
+	}
+	if len(sc.asked) != 3 || len(sc.notices) != 2 ||
+		!strings.HasPrefix(sc.notices[0], "empty passphrase") || !strings.HasPrefix(sc.notices[1], "wrong passphrase, try again (last try)") {
+		t.Errorf("asked %d times, notices %q", len(sc.asked), sc.notices)
+	}
+
+	sc = &scripted{answers: []string{"wrong 1", "wrong 2", "wrong 3", "right pass 1"}}
+	if _, err := LoadMap(mp, sc.pass()); !errors.Is(err, vault.ErrWrongPassphrase) || len(sc.asked) != 3 {
+		t.Errorf("three wrong: %v, asked %d times", err, len(sc.asked))
+	}
+	sc = &scripted{answers: []string{"", "", ""}}
+	if _, err := LoadMap(mp, sc.pass()); err == nil || !strings.Contains(err.Error(), "no passphrase entered") {
+		t.Errorf("three empty: %v", err)
+	}
+	// the environment variable is never asked again
+	if _, err := LoadMap(mp, Passphrases{Env: "wrong pass", Prompt: sc.pass().Prompt}); !errors.Is(err, vault.ErrWrongPassphrase) {
+		t.Errorf("env: %v", err)
 	}
 }
 

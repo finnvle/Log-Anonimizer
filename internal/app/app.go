@@ -24,22 +24,56 @@ const PassEnv = "LOGANON_PASSPHRASE"
 // MinPassphrase is the minimum length of a new passphrase.
 const MinPassphrase = 8
 
+// MaxTries is how often a typed passphrase may be wrong before giving up.
+const MaxTries = 3
+
 // Passphrases supplies map passphrases from the environment or a prompt.
+// Typed passphrases are asked again, up to MaxTries times, when they are
+// empty, too short, do not match, or do not open the map.
 type Passphrases struct {
 	Env    string                              // value of LOGANON_PASSPHRASE
 	Prompt func(prompt string) ([]byte, error) // nil when not interactive
-	Notice io.Writer                           // where "using LOGANON_PASSPHRASE" is printed
+	Notice func(msg string)                    // shows why a passphrase is asked again
 }
 
-// Existing returns the passphrase of an existing map.
+func (p Passphrases) notice(msg string) {
+	if p.Notice != nil {
+		p.Notice(msg)
+	}
+}
+
+func tryAgain(msg string, tries int) string {
+	if left := MaxTries - tries; left > 1 {
+		return fmt.Sprintf("%s, try again (%d tries left)", msg, left)
+	}
+	return msg + ", try again (last try)"
+}
+
+// Existing returns the passphrase of an existing map. Use LoadMap to also
+// re-ask when the passphrase is wrong.
 func (p Passphrases) Existing() ([]byte, error) {
+	tries := 0
+	return p.existing(&tries)
+}
+
+func (p Passphrases) existing(tries *int) ([]byte, error) {
 	if p.Env != "" {
 		return []byte(p.Env), nil
 	}
 	if p.Prompt == nil {
 		return nil, fmt.Errorf("%w (set %s or run in a terminal)", vault.ErrNeedPassphrase, PassEnv)
 	}
-	return p.Prompt("Map passphrase: ")
+	for {
+		*tries++
+		b, err := p.Prompt("Map passphrase: ")
+		if err != nil || len(b) > 0 {
+			return b, err
+		}
+		if *tries >= MaxTries {
+			return nil, errors.New("no passphrase entered")
+		}
+		p.notice(tryAgain("empty passphrase: type the one you chose when the map was made", *tries))
+	}
 }
 
 // New returns a passphrase for a new map, asking twice when prompting.
@@ -53,21 +87,45 @@ func (p Passphrases) New() ([]byte, error) {
 	if p.Prompt == nil {
 		return nil, fmt.Errorf("a passphrase is needed to encrypt the map: set %s, run in a terminal, or use -no-encrypt", PassEnv)
 	}
-	a, err := p.Prompt(fmt.Sprintf("New map passphrase (min %d chars): ", MinPassphrase))
-	if err != nil {
-		return nil, err
+	for tries := 1; ; tries++ {
+		a, err := p.Prompt(fmt.Sprintf("New map passphrase (min %d chars): ", MinPassphrase))
+		if err != nil {
+			return nil, err
+		}
+		var msg string
+		switch {
+		case len(a) == 0:
+			msg = "empty passphrase: the map needs one to stay private (or run with -no-encrypt)"
+		case len(a) < MinPassphrase:
+			msg = fmt.Sprintf("too short: use at least %d characters", MinPassphrase)
+		default:
+			b, err := p.Prompt("Repeat passphrase: ")
+			if err != nil {
+				return nil, err
+			}
+			if string(a) == string(b) {
+				return a, nil
+			}
+			msg = "the two passphrases do not match"
+		}
+		if tries >= MaxTries {
+			return nil, errors.New(msg)
+		}
+		p.notice(tryAgain(msg, tries))
 	}
-	if len(a) < MinPassphrase {
-		return nil, fmt.Errorf("passphrase must be at least %d characters", MinPassphrase)
+}
+
+// load opens a map, asking again when a typed passphrase is wrong.
+func load(path string, p Passphrases) (*vault.Vault, []byte, error) {
+	tries := 0
+	for {
+		v, used, err := vault.Load(path, func() ([]byte, error) { return p.existing(&tries) })
+		if errors.Is(err, vault.ErrWrongPassphrase) && p.Env == "" && p.Prompt != nil && tries < MaxTries {
+			p.notice(tryAgain("wrong passphrase", tries))
+			continue
+		}
+		return v, used, err
 	}
-	b, err := p.Prompt("Repeat passphrase: ")
-	if err != nil {
-		return nil, err
-	}
-	if string(a) != string(b) {
-		return nil, errors.New("passphrases do not match")
-	}
-	return a, nil
 }
 
 // AnonOptions configures Anonymize.
@@ -99,7 +157,7 @@ func Anonymize(o AnonOptions) (*AnonResult, error) {
 	var pass []byte
 	if o.Map != "" && fileExists(o.Map) {
 		var err error
-		v, pass, err = vault.Load(o.Map, o.Pass.Existing)
+		v, pass, err = load(o.Map, o.Pass)
 		if err != nil {
 			return nil, err
 		}
@@ -148,7 +206,7 @@ func Anonymize(o AnonOptions) (*AnonResult, error) {
 
 // LoadMap opens a map, asking for the passphrase if needed.
 func LoadMap(path string, p Passphrases) (*vault.Vault, error) {
-	v, _, err := vault.Load(path, p.Existing)
+	v, _, err := load(path, p)
 	return v, err
 }
 
