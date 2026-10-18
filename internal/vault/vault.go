@@ -209,8 +209,12 @@ func (v *Vault) CountByKind() map[Kind]int {
 
 // AddSource records a run.
 func (v *Vault) AddSource(s Source) {
+	now := time.Now().UTC()
+	if s.Time.IsZero() {
+		s.Time = now
+	}
 	v.Sources = append(v.Sources, s)
-	v.Updated = time.Now().UTC()
+	v.Updated = now
 }
 
 // TokenPattern matches tokens written with this vault's prefix. Callers must

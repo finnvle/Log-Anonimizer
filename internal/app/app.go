@@ -196,8 +196,9 @@ func Anonymize(o AnonOptions) (*AnonResult, error) {
 		return nil, err
 	}
 	res.Report = rep
-	abs := func(p string) string { a, _ := filepath.Abs(p); return a }
-	v.AddSource(vault.Source{Input: abs(o.Input), Output: abs(rep.Output), SHA256: rep.InputSHA256})
+	// paths as typed: an absolute path would put the user's home folder
+	// (and user name) into every map that gets passed around
+	v.AddSource(vault.Source{Input: o.Input, Output: rep.Output, SHA256: rep.InputSHA256})
 	if err := vault.Save(res.MapPath, v, pass); err != nil {
 		return nil, fmt.Errorf("output written but saving the map failed: %w", err)
 	}

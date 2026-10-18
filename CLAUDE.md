@@ -20,14 +20,7 @@ If the Go module proxy is unreachable, the dependencies are usually in the modul
 
 Releases: bump `const Version` in `internal/app/app.go`, commit and push, then run `scripts/build.sh` on a clean tree (binaries embed `vcs.revision`/`vcs.modified`; check with `go version -m dist/<file>`), then `gh release create vX.Y.Z dist/log_anonimizer_X.Y.Z_* dist/SHA256SUMS --target <commit>`.
 
-Regenerate `examples/` after detector changes (the example map is unencrypted on purpose):
-
-```bash
-cd examples
-go run ../cmd/log_anonimizer -q -f -a sample.log -p profile.yaml
-go run ../cmd/log_anonimizer -f -d sample.anon.log && cmp sample.log sample.restored.log
-go run ../cmd/log_anonimizer -show sample.anon.log > show.txt
-```
+Regenerate `examples/` after detector changes with `./examples/regenerate.sh`: it rewrites the outputs, `show.txt`, the plain `sample.anonmap` and `sample.encrypted.anonmap` (passphrase `example-passphrase`), and fails unless both maps restore `sample.log` exactly. Maps record input/output paths as typed, so run it from the repo, never with absolute paths that would publish a home folder.
 
 ## Data rules
 

@@ -4,8 +4,8 @@
   "encrypted": false,
   "vault": {
     "version": 1,
-    "created": "2026-10-18T09:25:40.055642Z",
-    "updated": "2026-10-18T09:25:40.058276Z",
+    "created": "2026-10-18T10:53:48.706005Z",
+    "updated": "2026-10-18T10:53:48.711009Z",
     "prefix": "",
     "counters": {
       "DEVICE": 1,
@@ -23,7 +23,7 @@
         "input": "sample.log",
         "output": "sample.anon.log",
         "sha256": "2b72553c3c5eee544afdc951a73b44306fbe6afcb06c0c90c002d1cf67af4595",
-        "time": "0001-01-01T00:00:00Z"
+        "time": "2026-10-18T10:53:48.711009Z"
       }
     ],
     "entries": [

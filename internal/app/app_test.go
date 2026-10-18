@@ -195,6 +195,9 @@ func TestExtendMapAcrossRuns(t *testing.T) {
 	if err != nil || v.Len() != 2 || len(v.Sources) != 2 {
 		t.Errorf("map after two runs: %v entries, %v sources, %v", v.Len(), len(v.Sources), err)
 	}
+	if err == nil && (v.Sources[1].Input != b || v.Sources[1].SHA256 == "" || v.Sources[1].Time.IsZero()) {
+		t.Errorf("source must be the path as given, with the input hash: %+v", v.Sources[1])
+	}
 }
 
 func TestVerifyAndFindMap(t *testing.T) {

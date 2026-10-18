@@ -168,7 +168,16 @@ Profile folder: `%AppData%\log_anonimizer\profiles` (Windows),
 | [`sample.anon.log`](examples/sample.anon.log) | after `-a` |
 | [`sample.restored.log`](examples/sample.restored.log) | after `-d`, identical to the input |
 | [`show.txt`](examples/show.txt) | `-show sample.anon.log` |
-| [`sample.anonmap`](examples/sample.anonmap) | the map, unencrypted only for the demo |
+| [`sample.anonmap`](examples/sample.anonmap) | the map, unencrypted so you can read it |
+| [`sample.encrypted.anonmap`](examples/sample.encrypted.anonmap) | the same map encrypted, as real maps are; passphrase `example-passphrase` |
+
+Try the encrypted one; it asks for the passphrase:
+
+```
+cd examples
+log_anonimizer -show sample.anon.log -m sample.encrypted.anonmap
+log_anonimizer -d sample.anon.log -m sample.encrypted.anonmap -o restored.log
+```
 
 A LogRhythm CSV export after `-a`: addresses and hostnames become tokens, the columns stay as they were.
 
