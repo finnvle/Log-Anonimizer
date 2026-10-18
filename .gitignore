@@ -1,0 +1,18 @@
+# Real customer logs - never commit
+Sample_Logs/
+Simple_Logs/
+
+# Build output
+dist/
+
+# Anonymizer outputs and maps (maps contain the real values)
+*.anonmap
+*.anon.*
+*.anon/
+*.restored.*
+*.restored/
+
+# ...except the fictional example in examples/
+!examples/*
+
+.DS_Store

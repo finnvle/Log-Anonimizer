@@ -1,0 +1,6 @@
+# Example profile used to create the files in this folder.
+# "acme" is the (fictional) organisation name: every word that contains it
+# is replaced, and acme.example is treated as an internal domain.
+name: example
+sensitive_terms: [acme]
+encrypt_map: false # only so the example map can be read; keep maps encrypted in real use

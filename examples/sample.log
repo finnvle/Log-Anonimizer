@@ -1,0 +1,11 @@
+Oct 10 08:15:02 fw-edge01 sshd[2211]: Accepted password for somchai.k from 203.0.113.45 port 51522 ssh2
+Oct 10 08:15:09 fw-edge01 sshd[2215]: Failed password for invalid user oracle from 198.51.100.23 port 40022 ssh2
+<134>1 2026-10-10T08:16:00+07:00 FW-ACME-01 - - - - TRAFFIC,deny,10.20.1.15,203.0.113.80,tcp,443,rule=Block-External
+2026-10-10 08:17:31 10.20.5.10 POST /Microsoft-Server-ActiveSync/default.eas Cmd=Sync&User=somchai.k%40acme.example&DeviceId=4f2a9c71b3e84d0f&DeviceType=iPhone 443 - 198.51.100.61 Apple-iPhone/1.0 - 200 0 0 31
+2026-10-10 08:18:12 10.20.5.10 GET /portal/login.aspx user=jdoe&password=Winter2026!&lang=th 443 - 10.20.8.44 Mozilla/5.0+(Windows+NT+10.0;+Win64;+x64)+Chrome/120.0.0.0 - 302 0 0 12
+<Event><System><EventID>4624</EventID><Computer>WS-SOMCHAI01.corp.acme.example</Computer></System><EventData><Data Name='TargetUserName'>somchai.k</Data><Data Name='TargetDomainName'>ACME</Data><Data Name='TargetUserSid'>S-1-5-21-3623811015-3361044348-30300820-1104</Data><Data Name='WorkstationName'>WS-SOMCHAI01</Data><Data Name='IpAddress'>10.20.8.44</Data><Data Name='SubjectUserSid'>S-1-5-18</Data></EventData></Event>
+NCM TIMESTAMP=10/10/2026 08:19:00 EVENT=CLOSE ORIGIN=ACMEDC01 LOCALIP=10.20.0.5 REMOTEIP=10.20.8.44 DETAILS=logonusers=ACME\somchai.k,ACME\svc-backup,NT AUTHORITY\SYSTEM
+kernel: IPfilter Dropped: IN=eth0 MAC=ff:ff:ff:ff:ff:ff:00:1a:2b:3c:4d:5e:08:00 SRC=10.20.8.44 DST=10.20.8.255 PROTO=UDP
+copy C:\Users\somchai.k\Desktop\salary-2026.xlsx to \\FS-ACME02\finance\ by ACME\somchai.k
+GET http://203.0.113.9@evil.example/backup/10.20.0.5.7z from 198.51.100.23 (probe for a backup of the DC)
+Analyst note: WS-SOMCHAI01 talked to FS-ACME02.corp.acme.example; contact helpdesk@acme.example or dns 8.8.8.8

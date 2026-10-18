@@ -1,0 +1,48 @@
+map:     sample.anonmap (not encrypted, 25 values)
+used in: sample.anon.log (25 distinct tokens, 45 occurrences)
+
+INTERNAL IP ADDRESSES
+  IP_0001      10.20.1.15                           1×
+  IP_0002      10.20.5.10                           2×
+  IP_0003      10.20.8.44                           4×
+  IP_0004      10.20.0.5                            2×
+  IP_0005      10.20.8.255                          1×
+
+PUBLIC IP ADDRESSES
+  EXTIP_0001   203.0.113.45                         1×
+  EXTIP_0002   198.51.100.23                        2×
+  EXTIP_0003   203.0.113.80                         1×
+  EXTIP_0004   198.51.100.61                        1×
+  EXTIP_0005   203.0.113.9                          1×
+
+HOSTNAMES
+  HOST_0001    fw-edge01                            2×
+  HOST_0002    FW-ACME-01                           1×
+  HOST_0003    WS-SOMCHAI01                         3×
+  HOST_0004    ACMEDC01                             1×
+  HOST_0005    FS-ACME02                            2×
+
+DOMAINS
+  DOMAIN_0001  acme.example                         2×
+  DOMAIN_0002  corp.acme.example                    2×
+  DOMAIN_0003  ACME                                 4×
+
+USERS
+  USER_0001    somchai.k                            6×
+  USER_0002    jdoe                                 1×
+  USER_0003    svc-backup                           1×
+
+MAC ADDRESSES
+  MAC_0001     00:1a:2b:3c:4d:5e                    1×
+
+SIDS (DOMAIN PART)
+  SID_0001     3623811015-3361044348-30300820       1×
+
+SECRETS
+  SECRET_0001  Wi*********                          1×
+
+DEVICE IDS
+  DEVICE_0001  4f2a9c71b3e84d0f                     1×
+
+Secrets are partly hidden; look one up with -find SECRET_0001.
+These are the REAL values: do not paste this output where the anonymized logs go.

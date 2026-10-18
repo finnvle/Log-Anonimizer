@@ -1,0 +1,11 @@
+Oct 10 08:15:02 HOST_0001 sshd[2211]: Accepted password for USER_0001 from EXTIP_0001 port 51522 ssh2
+Oct 10 08:15:09 HOST_0001 sshd[2215]: Failed password for invalid user oracle from EXTIP_0002 port 40022 ssh2
+<134>1 2026-10-10T08:16:00+07:00 HOST_0002 - - - - TRAFFIC,deny,IP_0001,EXTIP_0003,tcp,443,rule=Block-External
+2026-10-10 08:17:31 IP_0002 POST /Microsoft-Server-ActiveSync/default.eas Cmd=Sync&User=USER_0001%40DOMAIN_0001&DeviceId=DEVICE_0001&DeviceType=iPhone 443 - EXTIP_0004 Apple-iPhone/1.0 - 200 0 0 31
+2026-10-10 08:18:12 IP_0002 GET /portal/login.aspx user=USER_0002&password=SECRET_0001&lang=th 443 - IP_0003 Mozilla/5.0+(Windows+NT+10.0;+Win64;+x64)+Chrome/120.0.0.0 - 302 0 0 12
+<Event><System><EventID>4624</EventID><Computer>HOST_0003.DOMAIN_0002</Computer></System><EventData><Data Name='TargetUserName'>USER_0001</Data><Data Name='TargetDomainName'>DOMAIN_0003</Data><Data Name='TargetUserSid'>S-1-5-21-SID_0001-1104</Data><Data Name='WorkstationName'>HOST_0003</Data><Data Name='IpAddress'>IP_0003</Data><Data Name='SubjectUserSid'>S-1-5-18</Data></EventData></Event>
+NCM TIMESTAMP=10/10/2026 08:19:00 EVENT=CLOSE ORIGIN=HOST_0004 LOCALIP=IP_0004 REMOTEIP=IP_0003 DETAILS=logonusers=DOMAIN_0003\USER_0001,DOMAIN_0003\USER_0003,NT AUTHORITY\SYSTEM
+kernel: IPfilter Dropped: IN=eth0 MAC=ff:ff:ff:ff:ff:ff:MAC_0001:08:00 SRC=IP_0003 DST=IP_0005 PROTO=UDP
+copy C:\Users\USER_0001\Desktop\salary-2026.xlsx to \\HOST_0005\finance\ by DOMAIN_0003\USER_0001
+GET http://EXTIP_0005@evil.example/backup/IP_0004.7z from EXTIP_0002 (probe for a backup of the DC)
+Analyst note: HOST_0003 talked to HOST_0005.DOMAIN_0002; contact helpdesk@DOMAIN_0001 or dns 8.8.8.8

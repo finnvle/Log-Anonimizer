@@ -1,0 +1,157 @@
+{
+  "format": "log_anonimizer-map",
+  "version": 1,
+  "encrypted": false,
+  "vault": {
+    "version": 1,
+    "created": "2026-10-18T06:27:47.752661Z",
+    "updated": "2026-10-18T06:27:47.757373Z",
+    "prefix": "",
+    "counters": {
+      "DEVICE": 1,
+      "DOMAIN": 3,
+      "EXTIP": 5,
+      "HOST": 5,
+      "IP": 5,
+      "MAC": 1,
+      "SECRET": 1,
+      "SID": 1,
+      "USER": 3
+    },
+    "sources": [
+      {
+        "input": "sample.log",
+        "output": "sample.anon.log",
+        "sha256": "2b72553c3c5eee544afdc951a73b44306fbe6afcb06c0c90c002d1cf67af4595",
+        "time": "0001-01-01T00:00:00Z"
+      }
+    ],
+    "entries": [
+      {
+        "token": "HOST_0001",
+        "kind": "host",
+        "original": "fw-edge01"
+      },
+      {
+        "token": "USER_0001",
+        "kind": "user",
+        "original": "somchai.k"
+      },
+      {
+        "token": "EXTIP_0001",
+        "kind": "extip",
+        "original": "203.0.113.45"
+      },
+      {
+        "token": "EXTIP_0002",
+        "kind": "extip",
+        "original": "198.51.100.23"
+      },
+      {
+        "token": "HOST_0002",
+        "kind": "host",
+        "original": "FW-ACME-01"
+      },
+      {
+        "token": "IP_0001",
+        "kind": "ip",
+        "original": "10.20.1.15"
+      },
+      {
+        "token": "EXTIP_0003",
+        "kind": "extip",
+        "original": "203.0.113.80"
+      },
+      {
+        "token": "IP_0002",
+        "kind": "ip",
+        "original": "10.20.5.10"
+      },
+      {
+        "token": "DOMAIN_0001",
+        "kind": "domain",
+        "original": "acme.example"
+      },
+      {
+        "token": "DEVICE_0001",
+        "kind": "device",
+        "original": "4f2a9c71b3e84d0f"
+      },
+      {
+        "token": "EXTIP_0004",
+        "kind": "extip",
+        "original": "198.51.100.61"
+      },
+      {
+        "token": "USER_0002",
+        "kind": "user",
+        "original": "jdoe"
+      },
+      {
+        "token": "SECRET_0001",
+        "kind": "secret",
+        "original": "Winter2026!"
+      },
+      {
+        "token": "IP_0003",
+        "kind": "ip",
+        "original": "10.20.8.44"
+      },
+      {
+        "token": "HOST_0003",
+        "kind": "host",
+        "original": "WS-SOMCHAI01"
+      },
+      {
+        "token": "DOMAIN_0002",
+        "kind": "domain",
+        "original": "corp.acme.example"
+      },
+      {
+        "token": "DOMAIN_0003",
+        "kind": "domain",
+        "original": "ACME"
+      },
+      {
+        "token": "SID_0001",
+        "kind": "sid",
+        "original": "3623811015-3361044348-30300820"
+      },
+      {
+        "token": "HOST_0004",
+        "kind": "host",
+        "original": "ACMEDC01"
+      },
+      {
+        "token": "IP_0004",
+        "kind": "ip",
+        "original": "10.20.0.5"
+      },
+      {
+        "token": "USER_0003",
+        "kind": "user",
+        "original": "svc-backup"
+      },
+      {
+        "token": "MAC_0001",
+        "kind": "mac",
+        "original": "00:1a:2b:3c:4d:5e"
+      },
+      {
+        "token": "IP_0005",
+        "kind": "ip",
+        "original": "10.20.8.255"
+      },
+      {
+        "token": "HOST_0005",
+        "kind": "host",
+        "original": "FS-ACME02"
+      },
+      {
+        "token": "EXTIP_0005",
+        "kind": "extip",
+        "original": "203.0.113.9"
+      }
+    ]
+  }
+}
