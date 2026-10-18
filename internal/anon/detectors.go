@@ -796,13 +796,38 @@ var (
 	reSyslog5424 = regexp.MustCompile(`<[A-Za-z0-9:]{1,20}>\s*(?:1\s+)?\d{4}-\d{2}-\d{2}T[0-9:.]+(?:Z|[+-]\d{2}:?\d{2})?\s+(\S+)\s`)
 	// <PRI>Oct  6 00:49:00 HOST app ...   or a line starting with the date
 	reSyslogBSD = regexp.MustCompile(`(?:^|<[A-Za-z0-9:]{1,20}>\s*)[A-Z][a-z]{2}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2}\s+(\S+)\s`)
+	// a line starting with an ISO time, then the host, then a program or a
+	// level:  2026-10-06T00:49:00.123+07:00 HOST sshd[22]: ...  (rsyslog's
+	// high-precision format)  or  2026-10-06 00:49:00,123 HOST INFO ...
+	reISOHeader = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:[.,]\d{1,9})?(?:Z|[+-]\d{2}:?\d{2})?\s+` +
+		`([A-Za-z][A-Za-z0-9._-]*)\s+(?:[A-Za-z][A-Za-z0-9_./-]*(\[\d+\])?:\s|` +
+		`(?i:trace|debug|info|notice|warn|warning|error|err|crit|critical|fatal|alert|emerg|emergency)\b)`)
 )
+
+// isoHeaderHost: a sentence after a time ("2026-10-10 08:00:01 Starting
+// service: …") has the shape of a header too, so the word must look like a
+// host (a digit, "-" or ".") unless a syslog program with a [pid] follows.
+// Real KAPE logs had capitalised words there.
+func isoHeaderHost(h string, pid bool) bool {
+	return !logLevels[strings.ToLower(h)] && (pid || strings.ContainsAny(h, "0123456789-."))
+}
+
+var logLevels = map[string]bool{"trace": true, "debug": true, "info": true, "notice": true, "warn": true,
+	"warning": true, "error": true, "err": true, "crit": true, "critical": true, "fatal": true,
+	"alert": true, "emerg": true, "emergency": true}
 
 func startsWithMonth(t string) bool {
 	return len(t) > 4 && t[0] >= 'A' && t[0] <= 'Z' && t[1] >= 'a' && t[1] <= 'z' && t[2] >= 'a' && t[2] <= 'z' && t[3] == ' '
 }
 
 func (sc *Scanner) detectSyslog(t string, out []span) []span {
+	if len(t) > 20 && isDigit(t[0]) && t[4] == '-' {
+		if m := reISOHeader.FindStringSubmatchIndex(t); m != nil && isoHeaderHost(t[m[2]:m[3]], m[4] >= 0) {
+			if ps := sc.hostParts(t[m[2]:m[3]], true); ps != nil {
+				out = append(out, span{m[2], m[3], ps, prioContext})
+			}
+		}
+	}
 	res := []*regexp.Regexp{reSyslog5424, reSyslogBSD}
 	switch {
 	case strings.IndexByte(t, '<') >= 0:

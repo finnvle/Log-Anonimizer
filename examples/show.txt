@@ -44,5 +44,5 @@ SECRETS
 DEVICE IDS
   DEVICE_0001  4f2a9c71b3e84d0f                     1×
 
-Secrets are partly hidden: -find SECRET_0001 shows one.
+Secrets, card and ID numbers are partly hidden: -find SECRET_0001 shows one.
 Real values: don't paste this where the anonymized logs go.

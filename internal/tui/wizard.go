@@ -182,6 +182,9 @@ func toggleItems(t *profile.Toggles) []toggleItem {
 		{"Windows SIDs (domain part)", &t.SID},
 		{"Passwords, tokens, cookies, API keys", &t.Secrets},
 		{"Device IDs (ActiveSync DeviceId, IMEI)", &t.DeviceID},
+		{"Card numbers (Luhn-checked)", &t.CardNumber},
+		{"Thai national ID numbers (checksum-checked)", &t.NationalID},
+		{"Phone numbers (Thai and +country)", &t.Phone},
 		{"File and folder names in the output", &t.FileNames},
 	}
 }

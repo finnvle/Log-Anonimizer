@@ -21,7 +21,7 @@ func leakPatterns(v *vault.Vault, a *allowSet) ([]string, []vault.Entry) {
 	var ents []vault.Entry
 	for _, e := range v.Entries {
 		switch e.Kind {
-		case vault.IP, vault.ExtIP, vault.MAC, vault.SID:
+		case vault.IP, vault.ExtIP, vault.MAC, vault.SID, vault.Card, vault.NatID, vault.Phone:
 			if len(e.Original) < 3 {
 				continue
 			}
@@ -126,6 +126,7 @@ func Verify(path string, v *vault.Vault, p *profile.Profile) (*VerifyReport, err
 		return nil, err
 	}
 	for _, tg := range targets {
+		sc.ResetLines()
 		_, enc, err := sniff(tg.path)
 		if err != nil {
 			return nil, err

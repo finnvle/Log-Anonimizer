@@ -365,6 +365,9 @@ func (e *Engine) writeFile(j *job, dst string) error {
 
 // process learns (w == nil) or rewrites (w != nil) one file.
 func (e *Engine) process(j *job, w *bufio.Writer) error {
+	// a private key left open in one file must not swallow the next
+	e.SC.ResetLines()
+	defer e.SC.ResetLines()
 	r, closeFn, err := openText(j.abs, j.enc)
 	if err != nil {
 		return err

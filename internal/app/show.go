@@ -36,7 +36,11 @@ var kindLabels = map[vault.Kind]string{
 	vault.Domain: "domains", vault.User: "users", vault.Org: "sensitive terms",
 	vault.Name: "words that contain a sensitive term", vault.MAC: "MAC addresses",
 	vault.SID: "SIDs (domain part)", vault.Secret: "secrets", vault.Device: "device IDs",
+	vault.Card: "card numbers", vault.NatID: "national ID numbers", vault.Phone: "phone numbers",
 }
+
+// masked kinds are partly hidden by -show unless -find asks for them.
+func masked(k vault.Kind) bool { return k == vault.Secret || k == vault.Card || k == vault.NatID }
 
 // Show lists what tokens stand for. target is either a map, or an
 // anonymized file or folder; for the latter only the tokens it contains are
@@ -139,13 +143,14 @@ func countTokens(path string, v *vault.Vault, counts map[string]int) error {
 	})
 }
 
-func hasSecret(rows []ShowRow) bool {
+// hasMasked returns the token of the first masked row, or "".
+func hasMasked(rows []ShowRow) string {
 	for _, r := range rows {
-		if r.Kind == vault.Secret {
-			return true
+		if masked(r.Kind) {
+			return r.Token
 		}
 	}
-	return false
+	return ""
 }
 
 func mask(s string) string {
@@ -187,7 +192,7 @@ func FormatShow(r *ShowResult) string {
 	vals := make([]string, len(r.Rows))
 	for i, row := range r.Rows {
 		v := row.Original
-		if row.Kind == vault.Secret && r.Masked {
+		if masked(row.Kind) && r.Masked {
 			v = mask(v)
 		}
 		vals[i] = clip(v, 70)
@@ -207,8 +212,8 @@ func FormatShow(r *ShowResult) string {
 		b.WriteString(line + "\n")
 	}
 	b.WriteString("\n")
-	if r.Masked && hasSecret(r.Rows) {
-		b.WriteString("Secrets are partly hidden: -find SECRET_0001 shows one.\n")
+	if tok := hasMasked(r.Rows); r.Masked && tok != "" {
+		fmt.Fprintf(&b, "Secrets, card and ID numbers are partly hidden: -find %s shows one.\n", tok)
 	}
 	b.WriteString("Real values: don't paste this where the anonymized logs go.\n")
 	return b.String()

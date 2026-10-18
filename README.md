@@ -249,19 +249,24 @@ USERS
 | | Example | Token |
 |---|---|---|
 | IP (internal / public) | `10.1.2.3`, `203.0.113.5` | `IP_0001`, `EXTIP_0001` |
-| Host, internal FQDN | `DC01`, `dc01.corp.acme.example` | `HOST_0001`, `HOST_0001.DOMAIN_0001` |
+| Host, internal FQDN | `DC01`, `dc01.corp.acme.example`, `Server=sql01;` | `HOST_0001`, `HOST_0001.DOMAIN_0001` |
 | Account, e-mail | `CORP\jdoe`, `jdoe@acme.example` | `DOMAIN_0002\USER_0001`, `USER_0001@DOMAIN_0003` |
 | Path, share | `C:\Users\somchai\`, `\\FS01\share` | `C:\Users\USER_0002\`, `\\HOST_0002\share` |
 | SID | `S-1-5-21-111-222-333-500` | `S-1-5-21-SID_0001-500` |
 | MAC, device ID | `00:1a:2b:3c:4d:5e`, `DeviceId=…` | `MAC_0001`, `DEVICE_0001` |
-| Secret | `password=`, `token=`, `Authorization:`, cookies | `SECRET_0001` |
+| Secret | `password=`, `token=`, `Authorization:`, cookies, JWTs, AWS / GitHub / Slack / Google keys, private keys | `SECRET_0001` |
+| Card number (Luhn-checked) | `4111 1111 1111 1111` | `CARD_0001` |
+| Thai national ID (check digit) | `1-2345-67890-12-1`, or 13 digits after a label such as `citizen_id=` | `NATID_0001` |
+| Phone | `081-234-5678`, `02-123-4567`, `+66 2 123 4567` | `PHONE_0001` |
 | Sensitive term | `acme`, `ACMEDC01` | `ORG_0001`, `NAME_0001` |
+
+`-show` partly hides secrets, card numbers and national IDs unless you ask with `-find`.
 
 
 ## Limits
 
 - Detection is heuristic. `verify OK` means none of the replaced values is left; it cannot
-  see what the tool did not recognise, such as names in free text or card numbers.
-  Skim the output before sharing.
+  see what the tool did not recognise, such as people's names in free text or a 13-digit ID
+  with no label. Skim the output before sharing.
 - `DC01` and `dc01` share one token; `-d` restores the first spelling seen.
 

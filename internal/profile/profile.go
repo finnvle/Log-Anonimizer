@@ -27,6 +27,9 @@ type Toggles struct {
 	SID        bool `yaml:"sid"`
 	Secrets    bool `yaml:"secrets"`
 	DeviceID   bool `yaml:"device_id"`
+	CardNumber bool `yaml:"card_number"`
+	NationalID bool `yaml:"national_id"`
+	Phone      bool `yaml:"phone"`
 	FileNames  bool `yaml:"file_names"`
 }
 
@@ -62,7 +65,8 @@ func Default() *Profile {
 		Name: "default",
 		Anonymize: Toggles{
 			InternalIP: true, PublicIP: true, Hostname: true, Domain: true, User: true,
-			MAC: true, SID: true, Secrets: true, DeviceID: true, FileNames: true,
+			MAC: true, SID: true, Secrets: true, DeviceID: true,
+			CardNumber: true, NationalID: true, Phone: true, FileNames: true,
 		},
 		SensitiveTerms:   []string{},
 		InternalSuffixes: []string{"local", "lan", "corp", "internal", "localdomain", "home.arpa"},
@@ -258,8 +262,11 @@ anonymize:
   user: %t
   mac: %t
   sid: %t
-  secrets: %t         # passwords, tokens, cookies
+  secrets: %t         # passwords, tokens, cookies, API keys, private keys
   device_id: %t
+  card_number: %t     # payment cards (Luhn-checked)
+  national_id: %t     # Thai national ID (checksum-checked)
+  phone: %t           # Thai numbers and +country numbers
   file_names: %t      # also rename files and folders in the output
 
 internal_suffixes: %s
@@ -274,7 +281,8 @@ allow:
 
 encrypt_map: %t       # protect the .anonmap with a passphrase
 `, yamlScalar(p.Name), lists["terms"],
-		a.InternalIP, a.PublicIP, a.Hostname, a.Domain, a.User, a.MAC, a.SID, a.Secrets, a.DeviceID, a.FileNames,
+		a.InternalIP, a.PublicIP, a.Hostname, a.Domain, a.User, a.MAC, a.SID, a.Secrets, a.DeviceID,
+		a.CardNumber, a.NationalID, a.Phone, a.FileNames,
 		lists["suffixes"], lists["secrets"], lists["ips"], lists["hosts"], lists["domains"], lists["users"], p.EncryptMap)
 	return []byte(b.String()), nil
 }

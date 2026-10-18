@@ -27,14 +27,18 @@ const (
 	SID    Kind = "sid"    // the domain part of a Windows SID
 	Secret Kind = "secret" // passwords, tokens, cookies
 	Device Kind = "device" // device IDs (ActiveSync DeviceId, IMEI)
+	Card   Kind = "card"   // payment card numbers
+	NatID  Kind = "natid"  // national ID numbers (Thai)
+	Phone  Kind = "phone"  // phone numbers
 )
 
 // Kinds lists every kind in a stable order for reports.
-var Kinds = []Kind{IP, ExtIP, Host, Domain, User, Org, Name, MAC, SID, Secret, Device}
+var Kinds = []Kind{IP, ExtIP, Host, Domain, User, Org, Name, MAC, SID, Secret, Device, Card, NatID, Phone}
 
 var prefixes = map[Kind]string{
 	IP: "IP", ExtIP: "EXTIP", Host: "HOST", Domain: "DOMAIN", User: "USER", Org: "ORG",
 	Name: "NAME", MAC: "MAC", SID: "SID", Secret: "SECRET", Device: "DEVICE",
+	Card: "CARD", NatID: "NATID", Phone: "PHONE",
 }
 
 // Prefix returns the token prefix for a kind, e.g. "HOST".
@@ -112,9 +116,27 @@ func Key(k Kind, s string) string {
 		return "sid:" + strings.ToLower(s)
 	case Device:
 		return "device:" + strings.ToLower(s)
+	case Card, NatID, Phone:
+		// "4111 1111 1111 1111" and "4111-1111-1111-1111" are one card
+		return string(k) + ":" + digitsOnly(s)
 	default:
 		return "name:" + strings.ToLower(s)
 	}
+}
+
+// digitsOnly keeps the digits and a leading "+" (an international number
+// stays apart from the same digits without a country code).
+func digitsOnly(s string) string {
+	var b strings.Builder
+	if strings.HasPrefix(s, "+") {
+		b.WriteByte('+')
+	}
+	for i := 0; i < len(s); i++ {
+		if s[i] >= '0' && s[i] <= '9' {
+			b.WriteByte(s[i])
+		}
+	}
+	return b.String()
 }
 
 // trimIPv4Zeros turns 010.001.002.003 into 10.1.2.3 (netip rejects leading

@@ -18,7 +18,9 @@ go build -o log_anonimizer ./cmd/log_anonimizer
 
 If the Go module proxy is unreachable, the dependencies are usually in the module cache: prefix with `GOFLAGS=-mod=mod GOPROXY=off GOSUMDB=off`.
 
-Releases: bump `const Version` in `internal/app/app.go`, commit and push, then run `scripts/build.sh` on a clean tree (binaries embed `vcs.revision`/`vcs.modified`; check with `go version -m dist/<file>`), then `gh release create vX.Y.Z dist/log_anonimizer_X.Y.Z_* dist/SHA256SUMS --target <commit>`.
+CI (`.github/workflows/ci.yml`) runs vet and the tests on Linux, Windows and macOS, plus gofmt and `examples/regenerate.sh` (the outputs must not change).
+
+Releases: bump `const Version` in `internal/app/app.go`, commit and push, then push the tag `vX.Y.Z`. `.github/workflows/release.yml` checks the tag against `Version`, runs the tests, builds with `scripts/build.sh` and creates a **draft** release with the binaries and `SHA256SUMS`; write the notes and publish it from GitHub (or `gh release edit vX.Y.Z --draft=false --notes-file …`). By hand instead: `scripts/build.sh` on a clean tree (binaries embed `vcs.revision`/`vcs.modified`; check with `go version -m dist/<file>`), then `gh release create vX.Y.Z dist/log_anonimizer_X.Y.Z_* dist/SHA256SUMS --target <commit>`.
 
 Regenerate `examples/` after detector changes with `./examples/regenerate.sh`: it rewrites the outputs, `show.txt`, the plain `sample.anonmap` and `sample.encrypted.anonmap` (passphrase `example-passphrase`), and fails unless both maps restore `sample.log` exactly. Maps record input/output paths as typed, so run it from the repo, never with absolute paths that would publish a home folder.
 
@@ -38,6 +40,8 @@ Packages: `cmd/log_anonimizer` (flag parsing, `run(args, env)` is testable) → 
 - Domains are replaced only when internal: configured `internal_suffixes`, domains learned from identity contexts (`<Computer>`, syslog host, `FieldHost`, e-mail and `DOMAIN\user` outside URLs), or anything containing a `sensitive_terms` entry (`internalDomain`). Unknown external domains are kept as IOCs, and the engine reports them as `KeptDomains`. `FieldHostRemote` and URL contexts never teach new internal domains.
 - Attacker input is evidence and is kept on purpose: `invalid user X`, probed URL paths, bot contact e-mails, `host:80@domain`. Version strings (`Chrome/120.0.0.0`, `rv:1.8.0.6`, GAC folders) are not IPs (`isVersion`). Several heuristics deal with `%XX` encoding and escaped `\r\n`/`\t` text. Each was added for a real case, and each case is pinned in `detect_test.go`.
 - `allow.go` holds the built-in allow lists. `commonWords` keeps generic words found in user/host fields from being searched for in free text.
+- Numbers (`numbers.go`) must prove what they are, because logs are full of timestamps and IDs: cards pass Luhn and a brand prefix/length (nothing starting with 1, so epoch times and snowflake IDs never match); Thai national IDs pass the check digit and are grouped `1-2345-67890-12-1` or labelled (`natIDWords`), since a bare 13-digit number may be milliseconds; phones have a Thai grouping or a `+country` prefix. `detectNumbers` walks each digit run once (regexes here cost 30× more on real data); time it on the LogRhythm CSV after changes.
+- `keys.go`: credentials recognisable by shape (JWT, AWS/GitHub/Slack/Google/Stripe keys), private keys and connection strings. A key file spans lines, so `Scanner.inKey` carries state from a BEGIN line to the END line; the engine and verify call `ResetLines` per file. Test strings that look like real tokens are split (`"gh" + "p_" + …`) so GitHub push protection does not block the push.
 
 ### Engine (`engine.go`)
 
@@ -45,7 +49,7 @@ Packages: `cmd/log_anonimizer` (flag parsing, `run(args, env)` is testable) → 
 
 ### Tokens and restore (`internal/vault`, `internal/anon/restore.go`)
 
-- `Key` normalizes values so case variants of host/user/domain/org share one token. `-d` returns the first spelling seen, so case-only differences after a round trip are expected. Secrets are case-sensitive.
+- `Key` normalizes values so case variants of host/user/domain/org share one token, and card, ID and phone numbers are keyed by their digits (`4111 1111…` and `4111-1111…` share one). `-d` returns the first spelling seen, so case-only differences after a round trip are expected. Secrets are case-sensitive. New kinds go in `vault.Kinds` and `prefixes` (the token regexp is built from them), `kindLabels` in `app/show.go`, the profile toggles and `Marshal`, and the wizard's `toggleItems`. An older binary opens a map with new kinds but its token regexp does not know them, so its `-d` silently leaves those tokens in place: say so in the release notes.
 - `anon.RestoreString` finds tokens with `vault.TokenPattern`, `vault.IsTokenStart` (no letter or digit before, except after `%XX` or a `\n`/`\r`/`\t` escape) and `Vault.Resolve` (longest known prefix when digits follow).
 - **Invariant:** any change to detector boundaries must still emit tokens that `-d` can find. Never put a token directly after a letter or digit. Digits after a token are fine. `dictBoundary`/`ipBoundary` and `boundaryOK` in `verify.go` must stay consistent with each other.
 - The map file is a JSON envelope, plain or AES-256-GCM with an Argon2id key, written with 0600 permissions. Test packages that save encrypted maps lower `vault.KDFTime/KDFMemory/KDFThreads` in `TestMain`.

@@ -87,6 +87,8 @@ type Scanner struct {
 	urlMode, uaMode bool
 	// escaped is set for text with \r\n, \t escapes written out.
 	escaped bool
+	// inKey is set between the BEGIN and END lines of a private key.
+	inKey bool
 }
 
 // NewScanner creates a scanner for a profile and vault.
@@ -387,6 +389,10 @@ func (sc *Scanner) find(text string, useDict bool) []span {
 		c = sc.detectDomainUser(text, c)
 		c = sc.detectUNC(text, c)
 		c = sc.detectUserPath(text, c)
+		c = sc.detectConnString(text, c)
+		c = sc.detectTokenSecrets(text, c)
+		c = sc.detectPrivateKey(text, c)
+		c = sc.detectNumbers(text, c)
 	}
 	c = sc.detectIPv4(text, c)
 	c = sc.detectIPv6(text, c)
