@@ -185,7 +185,7 @@ func TestDirectoryNamesAndReport(t *testing.T) {
 			t.Errorf("report contains %q", secret)
 		}
 	}
-	if !strings.Contains(report, "verify    OK") {
+	if !strings.Contains(report, "verify    OK: none of the replaced values is left\n") {
 		t.Errorf("report:\n%s", report)
 	}
 }
@@ -281,6 +281,14 @@ func TestVerifyFindsLeaksAndResiduals(t *testing.T) {
 	if clean.LeakCount != 0 || len(clean.Residual) != 0 {
 		t.Errorf("clean output flagged: %+v", clean)
 	}
+	// "OK" must say what was checked, not that the file is safe
+	text := FormatVerify(clean, true)
+	for _, want := range []string{"map       OK: no value from the map found\n",
+		"detectors OK: nothing they recognise is in clear text\n"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("missing %q in:\n%s", want, text)
+		}
+	}
 	// someone edits the output and pastes a real value back in
 	os.WriteFile(rep.Output, []byte(read(t, rep.Output)+"note: fileserver01 and 10.1.1.1 and new 10.9.9.9\n"), 0o644)
 	dirty, err := Verify(rep.Output, v, testProfile())
@@ -293,7 +301,7 @@ func TestVerifyFindsLeaksAndResiduals(t *testing.T) {
 	if dirty.Residual[vault.IP] != 2 || dirty.Residual[vault.Host] != 0 {
 		t.Errorf("residual %v", dirty.Residual)
 	}
-	text := FormatVerify(dirty, true)
+	text = FormatVerify(dirty, true)
 	if strings.Contains(text, "fileserver01") || strings.Contains(text, "10.9.9.9") {
 		t.Errorf("verify report must not print original values:\n%s", text)
 	}

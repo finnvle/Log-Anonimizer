@@ -645,7 +645,9 @@ func formatReport(r *Report, screen bool) string {
 		}
 	}
 	if r.LeakCount == 0 {
-		b.WriteString("verify    OK\n")
+		// only values the tool replaced are searched for, so say so: an
+		// undetected card number or name would not make this fail
+		b.WriteString("verify    OK: none of the replaced values is left\n")
 	} else {
 		fmt.Fprintf(&b, "verify    FAILED: %d original value(s) left\n", r.LeakCount)
 		for i, l := range r.Leaks {

@@ -205,7 +205,7 @@ func FormatVerify(r *VerifyReport, withMap bool) string {
 	case !withMap:
 		b.WriteString("map       not checked (add -m <map> to look for every known value)\n")
 	case r.LeakCount == 0:
-		b.WriteString("map       OK: no original value found\n")
+		b.WriteString("map       OK: no value from the map found\n")
 	default:
 		fmt.Fprintf(&b, "map       FAILED: %d original value(s) found\n", r.LeakCount)
 		for _, l := range r.Leaks {
@@ -221,7 +221,7 @@ func FormatVerify(r *VerifyReport, withMap bool) string {
 		}
 	}
 	if total == 0 {
-		b.WriteString("detectors OK: nothing left to anonymize\n")
+		b.WriteString("detectors OK: nothing they recognise is in clear text\n")
 	} else {
 		fmt.Fprintf(&b, "detectors WARNING: %d value(s) in clear text (%s)\n", total, strings.Join(kinds, " · "))
 		for _, l := range r.ResidualSamples {
