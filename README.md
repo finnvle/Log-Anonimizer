@@ -43,15 +43,21 @@ go build -o log_anonimizer ./cmd/log_anonimizer   # this machine
 # Build for all platforms into dist/
 ./scripts/build.sh
 ```
-
-## Usage
+## TUI Usage (Easier)
 
 ```
-log_anonimizer  # wizard: pick options with arrow keys and Space
-log_anonimizer -a export.csv    # anonymize  -> export.anon.csv + export.anonmap
-log_anonimizer -d export.anon.csv   # restore -> export.restored.csv
-log_anonimizer -show export.anon.csv    # which token is which real value
-log_anonimizer -verify export.anon.csv -m export.anonmap   # check before sharing
+./log_anonimizer
+```
+
+
+## CLI Usage
+
+```
+./log_anonimizer -h
+./log_anonimizer -a export.csv    # anonymize  -> export.anon.csv + export.anonmap
+./log_anonimizer -d export.anon.csv   # restore -> export.restored.csv
+./log_anonimizer -show export.anon.csv    # which token is which real value
+./log_anonimizer -verify export.anon.csv -m export.anonmap   # check before sharing
 ```
 
 `-a` and `-d` also take a folder (e.g. a KAPE triage). `-d` works on any text with tokens,
@@ -85,11 +91,13 @@ xattr -d com.apple.quarantine log_anonimizer    # if Gatekeeper blocks it
 
 ### Passphrase
 
-There is nothing to set up. `-a` asks for a passphrase to lock the map (typing is hidden):
+You need to create the passphrase if profile set as "encrypt_map: false " (Or if you say Yes in TUI)
 
 ```
-New map passphrase (min 8 chars): ********
-Repeat passphrase: ********
+...
+* Protect the map with a passphrase? Yes (recommended)
+* Map passphrase ********
+* Repeat passphrase ********
 ```
 
 `-d`, `-show` and `-verify` ask for it again. If you forget it, the map cannot be opened.
@@ -150,13 +158,8 @@ A LogRhythm CSV export after `-a`: addresses and hostnames become tokens, the co
 
 ![LogRhythm CSV columns after -a](img/img1.png)
 
-```
-in:   copy C:\Users\somchai.k\Desktop\salary-2026.xlsx to \\FS-ACME02\finance\ by ACME\somchai.k
-out:  copy C:\Users\USER_0001\Desktop\salary-2026.xlsx to \\HOST_0005\finance\ by DOMAIN_0003\USER_0001
 
-in:   GET http://203.0.113.9@evil.example/backup/10.20.0.5.7z from 198.51.100.23
-out:  GET http://EXTIP_0005@evil.example/backup/IP_0004.7z from EXTIP_0002
-```
+### Find from specific plaintext in map file
 
 ```
 $ log_anonimizer -show sample.anon.log -find somchai
@@ -179,10 +182,6 @@ USERS
 | Secret | `password=`, `token=`, `Authorization:`, cookies | `SECRET_0001` |
 | Sensitive term | `acme`, `ACMEDC01` | `ORG_0001`, `NAME_0001` |
 
-**Kept:** timestamps, ports, event IDs, hashes, versions (`Chrome/120.0.0.0`), well-known SIDs
-and accounts (`S-1-5-18`, `NT AUTHORITY\SYSTEM`), loopback and netmasks, public domains, and
-attacker input (unknown domains, probed URLs, `invalid user oracle`), because those are IOCs.
-The summary lists the domains it kept, so you can spot your own.
 
 **Input:** text logs, CSV (LogRhythm, EvtxECmd, …), IIS W3C, Windows event XML, syslog,
 UTF-8/UTF-16, folders. Binary files (evtx, registry, `$MFT`) are skipped: convert them to CSV
@@ -198,8 +197,6 @@ first with EvtxECmd / RECmd / MFTECmd.
 
 - Detection is heuristic: check the `verify` line and skim the output before sharing.
 - `DC01` and `dc01` share one token; `-d` restores the first spelling seen.
-
-## Development
 
 ```bash
 go test ./...
