@@ -14,9 +14,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # the newest 1.26 patch, not the minimum in go.mod: patches carry
+      # security fixes (crypto, net) that end up in the binaries
       - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version: '1.26.x'
+          check-latest: true
+      - run: go version
       - name: tag matches the version in the code
         run: |
           v=$(sed -n 's/^const Version = "\(.*\)"/\1/p' internal/app/app.go)
