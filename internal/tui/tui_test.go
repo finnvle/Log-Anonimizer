@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"log_anonimizer/internal/app"
 	"log_anonimizer/internal/profile"
 	"log_anonimizer/internal/vault"
 )
@@ -208,7 +209,8 @@ func TestWizardAnonymize(t *testing.T) {
 	if err != nil || p.Anonymize.PublicIP || p.SensitiveTerms[0] != "acme" || p.EncryptMap {
 		t.Errorf("saved profile %+v %v", p, err)
 	}
-	if !strings.Contains(out, "log_anonimizer -a "+in+" -p case1\n") {
+	// quoted on Windows, where the temp folder has \ and ~ in it
+	if !strings.Contains(out, "log_anonimizer -a "+app.Quote(in)+" -p case1\n") {
 		t.Errorf("equivalent command missing:\n%s", out)
 	}
 	if info, err := vault.Stat(filepath.Join(dir, "fw.anonmap")); err != nil || info.Encrypted {
