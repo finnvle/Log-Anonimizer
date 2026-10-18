@@ -73,6 +73,7 @@ const usage = `log_anonimizer %s - replace sensitive values in logs with tokens
 
 Usage:
   log_anonimizer                         interactive wizard (pick options with checkboxes)
+  log_anonimizer -i                      the same wizard
   log_anonimizer -a <file|dir> [options] anonymize
   log_anonimizer -d <file|dir> [options] de-anonymize with the matching map
   log_anonimizer -verify <file|dir>      check anonymized output (add -m to check every known value)
@@ -93,10 +94,12 @@ Options:
   -profiles       list saved profiles
   -print-profile  print the effective profile as YAML (save it, edit it, use -p file.yaml)
   -version        print the version
+  -h              this help
 
 Environment:
   LOGANON_PASSPHRASE   map passphrase (otherwise you are asked for it)
   LOGANON_PROFILE_DIR  where named profiles are stored
+  NO_COLOR             no colours
 
 Exit codes: 0 ok, 1 error, 2 usage, 3 original values found in the output.
 `

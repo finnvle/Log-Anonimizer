@@ -91,7 +91,7 @@ xattr -d com.apple.quarantine log_anonimizer    # if Gatekeeper blocks it
 
 ### Passphrase
 
-You need to create the passphrase if profile set as "encrypt_map: false " (Or if you say Yes in TUI)
+You create a passphrase when the profile has `encrypt_map: true` (the default), or when you answer Yes in the TUI.
 
 ```
 ...
@@ -105,15 +105,33 @@ For scripts only, where nobody can type, put it in the `LOGANON_PASSPHRASE` envi
 
 ### Options
 
+| Command | |
+|---|---|
+| *(nothing)* or `-i` | TUI wizard |
+| `-a <file\|folder>` | anonymize |
+| `-d <file\|folder>` | restore the real values (uses the map next to it, or `-m`) |
+| `-show <map\|file\|folder>` | which token is which real value |
+| `-verify <file\|folder>` | check anonymized output; add `-m` to look for every known value |
+
 | Option | |
 |---|---|
-| `-o <path>` | output file or folder |
+| `-o <path>` | output file or folder (default: next to the input) |
 | `-m <map>` | map to use; with `-a`, an existing map is extended (same tokens as before) |
-| `-p <profile>` | profile name or `.yaml` file |
-| `-find <text>` | with `-show`: only matching tokens or values |
-| `-f` | overwrite |
-| `-q` | no progress |
+| `-p <profile>` | profile name or `.yaml` file (default: `default`) |
+| `-find <text>` | with `-show`: only matching tokens or values (also shows secrets) |
+| `-f` | overwrite existing output and map |
+| `-q` | no progress messages |
 | `-no-encrypt` | plain map (not recommended) |
+| `-profiles` | list saved profiles |
+| `-print-profile` | print a profile with comments (add `-p` for another one) |
+| `-version` | print the version |
+| `-h` | help |
+
+| Environment variable | |
+|---|---|
+| `LOGANON_PASSPHRASE` | map passphrase, for scripts |
+| `LOGANON_PROFILE_DIR` | folder for profiles (instead of the default below) |
+| `NO_COLOR` | no colours |
 
 Exit codes: `0` ok, `1` error, `2` usage, `3` real values found in the output.
 
