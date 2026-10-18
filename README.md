@@ -237,11 +237,6 @@ skipped, left out of the output and listed in `ANONYMIZATION_REPORT.txt`. Conver
 | Secret | `password=`, `token=`, `Authorization:`, cookies | `SECRET_0001` |
 | Sensitive term | `acme`, `ACMEDC01` | `ORG_0001`, `NAME_0001` |
 
-## The map
-
-- `*.anonmap` turns tokens back into real values. **Never share it.**
-- Encrypted with a passphrase by default; a wrong passphrase or an edited file is rejected.
-- Reuse it with `-m` for later batches so tokens stay the same.
 
 ## Limits
 
