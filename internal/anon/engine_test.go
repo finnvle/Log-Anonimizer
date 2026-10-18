@@ -183,7 +183,7 @@ func TestDirectoryNamesAndReport(t *testing.T) {
 			t.Errorf("report contains %q", secret)
 		}
 	}
-	if !strings.Contains(report, "verify:        OK") {
+	if !strings.Contains(report, "verify    OK") {
 		t.Errorf("report:\n%s", report)
 	}
 }

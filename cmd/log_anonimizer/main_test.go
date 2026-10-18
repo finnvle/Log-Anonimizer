@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"log_anonimizer/internal/profile"
 	"log_anonimizer/internal/vault"
 )
 
@@ -72,7 +73,7 @@ func TestAnonymizeRestoreVerify(t *testing.T) {
 	if string(got) != "Oct  6 00:49:00 HOST_0001 sshd[1]: Accepted password for USER_0001 from EXTIP_0001 port 22\n" {
 		t.Errorf("anonymized: %q", got)
 	}
-	if !strings.Contains(r.stdout, "verify:        OK") || strings.Contains(r.stdout, "alice") {
+	if !strings.Contains(r.stdout, "verify    OK") || strings.Contains(r.stdout, "alice") {
 		t.Errorf("summary: %s", r.stdout)
 	}
 	if r := cli(t, pass, "-a", in); r.code != exitError || !strings.Contains(r.stderr, "already exists") {
@@ -153,7 +154,7 @@ func TestProfiles(t *testing.T) {
 	if !strings.Contains(string(got), "from 203.0.113.50 port") {
 		t.Errorf("public IP should be kept by the profile: %q", got)
 	}
-	if r := cli(t, nil, "-profiles"); r.code != 0 || !strings.Contains(r.stdout, "default (built-in)") {
+	if r := cli(t, nil, "-profiles"); r.code != 0 || !strings.Contains(r.stdout, "default") {
 		t.Errorf("-profiles: %+v", r)
 	}
 }
@@ -174,5 +175,29 @@ func TestShowFlag(t *testing.T) {
 	}
 	if r := cli(t, pass, "-show", in, "-a", in); r.code != exitUsage {
 		t.Errorf("two modes: %+v", r)
+	}
+}
+
+func TestDefaultProfileWarning(t *testing.T) {
+	in := logFile(t)
+	r := cli(t, pass, "-a", in, "-q")
+	if r.code != 0 || !strings.Contains(r.stderr, "! no -p given: created and using the default profile") ||
+		!strings.Contains(r.stderr, "! no sensitive_terms") {
+		t.Fatalf("first run: %+v", r)
+	}
+	dir, _ := profile.Dir()
+	if _, err := os.Stat(filepath.Join(dir, "default.yaml")); err != nil {
+		t.Errorf("default.yaml not created: %v", err)
+	}
+	// the default file is used from now on: edit it like a user would
+	os.WriteFile(filepath.Join(dir, "default.yaml"), []byte("sensitive_terms: [web04]\n"), 0o600)
+	r = cli(t, pass, "-a", in, "-q", "-f")
+	if !strings.Contains(r.stderr, "! no -p given: using the default profile") || strings.Contains(r.stderr, "sensitive_terms") {
+		t.Errorf("second run: %+v", r)
+	}
+	pf := filepath.Join(filepath.Dir(in), "acme.yaml")
+	os.WriteFile(pf, []byte("sensitive_terms: [acme]\n"), 0o600)
+	if r := cli(t, pass, "-a", in, "-q", "-f", "-p", pf); strings.Contains(r.stderr, "!") {
+		t.Errorf("with -p and terms there is nothing to warn about: %+v", r)
 	}
 }

@@ -196,35 +196,36 @@ func verifyTargets(path string) ([]verifyTarget, error) {
 // FormatVerify renders a verify report.
 func FormatVerify(r *VerifyReport, withMap bool) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "files checked: %d\n", r.Files)
-	if withMap {
-		if r.LeakCount == 0 {
-			b.WriteString("known values:  OK - no original value from the map was found\n")
-		} else {
-			fmt.Fprintf(&b, "known values:  FAILED - %d occurrence(s) of original values:\n", r.LeakCount)
-			for _, l := range r.Leaks {
-				fmt.Fprintf(&b, "  - %s:%d  %s (%s)\n", l.File, l.Line, l.Token, l.Kind)
-			}
+	files := "1 file"
+	if r.Files != 1 {
+		files = fmt.Sprintf("%d files", r.Files)
+	}
+	fmt.Fprintf(&b, "checked   %s\n", files)
+	switch {
+	case !withMap:
+		b.WriteString("map       not checked (add -m <map> to look for every known value)\n")
+	case r.LeakCount == 0:
+		b.WriteString("map       OK: no original value found\n")
+	default:
+		fmt.Fprintf(&b, "map       FAILED: %d original value(s) found\n", r.LeakCount)
+		for _, l := range r.Leaks {
+			fmt.Fprintf(&b, "          %s:%d  %s\n", l.File, l.Line, l.Token)
 		}
-	} else {
-		b.WriteString("known values:  not checked (no map given)\n")
 	}
 	total := 0
-	for _, n := range r.Residual {
-		total += n
+	var kinds []string
+	for _, k := range vault.Kinds {
+		if n := r.Residual[k]; n > 0 {
+			total += n
+			kinds = append(kinds, fmt.Sprintf("%s %d", k.Prefix(), n))
+		}
 	}
 	if total == 0 {
-		b.WriteString("detectors:     OK - nothing left that the detectors would anonymize\n")
+		b.WriteString("detectors OK: nothing left to anonymize\n")
 	} else {
-		fmt.Fprintf(&b, "detectors:     WARNING - %d value(s) in clear text:", total)
-		for _, k := range vault.Kinds {
-			if n := r.Residual[k]; n > 0 {
-				fmt.Fprintf(&b, " %s=%d", k.Prefix(), n)
-			}
-		}
-		b.WriteString("\n")
+		fmt.Fprintf(&b, "detectors WARNING: %d value(s) in clear text (%s)\n", total, strings.Join(kinds, " · "))
 		for _, l := range r.ResidualSamples {
-			fmt.Fprintf(&b, "  - %s:%d  %s\n", l.File, l.Line, l.Kind)
+			fmt.Fprintf(&b, "          %s:%d  %s\n", l.File, l.Line, l.Kind)
 		}
 	}
 	return b.String()

@@ -15,12 +15,13 @@ import (
 var errCancel = errors.New("cancelled")
 
 const (
-	sBold  = "\x1b[1m"
-	sDim   = "\x1b[2m"
-	sCyan  = "\x1b[36m"
-	sGreen = "\x1b[32m"
-	sRed   = "\x1b[31m"
-	sReset = "\x1b[0m"
+	sBold   = "\x1b[1m"
+	sDim    = "\x1b[2m"
+	sCyan   = "\x1b[36m"
+	sGreen  = "\x1b[32m"
+	sRed    = "\x1b[31m"
+	sYellow = "\x1b[33m"
+	sReset  = "\x1b[0m"
 )
 
 // ui draws one widget at a time below the previous answers.

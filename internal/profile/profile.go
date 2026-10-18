@@ -4,6 +4,7 @@ package profile
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -219,25 +220,96 @@ func Parse(data []byte) (*Profile, error) {
 	return p, nil
 }
 
-const header = `# log_anonimizer profile
-#
-# anonymize:         which kinds of value are replaced with tokens
-# sensitive_terms:   organisation names, project codes ... (min 3 chars).
-#                    Any word that contains one is replaced as a whole.
-#                    A term with a dot (acme.co.th) is also an internal domain.
-# internal_suffixes: DNS suffixes that are always internal
-# secret_keys:       key=value / URL parameter / header names whose value is secret
-# allow:             values that are never anonymized (added to built-in lists)
-# encrypt_map:       protect the .anonmap file with a passphrase
-`
-
-// Marshal encodes a profile as commented YAML.
+// Marshal encodes a profile as short, commented YAML.
 func Marshal(p *Profile) ([]byte, error) {
-	body, err := yaml.Marshal(p)
-	if err != nil {
-		return nil, err
+	flow := func(l []string) (string, error) {
+		parts := make([]string, len(l))
+		for i, v := range l {
+			parts[i] = yamlScalar(v)
+		}
+		return "[" + strings.Join(parts, ", ") + "]", nil
 	}
-	return append([]byte(header), body...), nil
+	lists := map[string]string{}
+	for k, l := range map[string][]string{
+		"terms": p.SensitiveTerms, "suffixes": p.InternalSuffixes, "secrets": p.SecretKeys,
+		"ips": p.Allow.IPs, "hosts": p.Allow.Hosts, "domains": p.Allow.Domains, "users": p.Allow.Users,
+	} {
+		f, err := flow(l)
+		if err != nil {
+			return nil, err
+		}
+		lists[k] = f
+	}
+	a := p.Anonymize
+	var b strings.Builder
+	fmt.Fprintf(&b, `# log_anonimizer profile. Without -p, the profile named "default" is used.
+
+name: %s
+
+# Your organisation's names, project codes, internal domains (3+ characters).
+# Anything that contains one is replaced. Example: [acme, acme.co.th]
+sensitive_terms: %s
+
+anonymize:
+  internal_ip: %t
+  public_ip: %t       # false = keep attackers' IPs as IOCs
+  hostname: %t
+  domain: %t
+  user: %t
+  mac: %t
+  sid: %t
+  secrets: %t         # passwords, tokens, cookies
+  device_id: %t
+  file_names: %t      # also rename files and folders in the output
+
+internal_suffixes: %s
+secret_keys: %s
+
+# never replaced (on top of the built-in lists)
+allow:
+  ips: %s      # addresses or CIDRs
+  hosts: %s
+  domains: %s  # and their subdomains
+  users: %s
+
+encrypt_map: %t       # protect the .anonmap with a passphrase
+`, yamlScalar(p.Name), lists["terms"],
+		a.InternalIP, a.PublicIP, a.Hostname, a.Domain, a.User, a.MAC, a.SID, a.Secrets, a.DeviceID, a.FileNames,
+		lists["suffixes"], lists["secrets"], lists["ips"], lists["hosts"], lists["domains"], lists["users"], p.EncryptMap)
+	return []byte(b.String()), nil
+}
+
+// yamlScalar writes a string plainly when that is safe, otherwise as a
+// double-quoted (JSON) string, which YAML reads the same way.
+func yamlScalar(v string) string {
+	plain := v != "" && !strings.ContainsAny(v, ",[]{}:#&*!|>'\"%@`\\") && strings.TrimSpace(v) == v &&
+		!strings.ContainsAny(v[:1], "-?") && strings.ToLower(v) != "true" && strings.ToLower(v) != "false" &&
+		strings.ToLower(v) != "null" && strings.ToLower(v) != "yes" && strings.ToLower(v) != "no" &&
+		strings.Trim(v, "0123456789.+-eE_") != "" // numbers would load as numbers
+	if plain {
+		return v
+	}
+	var b strings.Builder
+	enc := json.NewEncoder(&b)
+	enc.SetEscapeHTML(false)
+	enc.Encode(v)
+	return strings.TrimSpace(b.String())
+}
+
+// EnsureDefault writes the built-in profile to default.yaml in the profile
+// directory if it is not there yet, so new users can find and edit it.
+func EnsureDefault() (path string, created bool, err error) {
+	path, err = Path("default")
+	if err != nil {
+		return "", false, err
+	}
+	if _, err := os.Stat(path); err == nil {
+		return path, false, nil
+	}
+	if _, err := Save(Default(), "default"); err != nil {
+		return path, false, err
+	}
+	return path, true, nil
 }
 
 // Save writes a profile under its name and returns the path.

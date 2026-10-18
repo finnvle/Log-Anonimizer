@@ -33,7 +33,14 @@ const (
 )
 
 func main() {
-	os.Exit(run(os.Args[1:], newEnv()))
+	e := newEnv()
+	restore := func() {}
+	if e.color {
+		restore = tui.SetupConsole(os.Stderr)
+	}
+	code := run(os.Args[1:], e)
+	restore()
+	os.Exit(code)
 }
 
 // env is everything run needs from the outside world, so tests can fake it.
@@ -43,12 +50,14 @@ type env struct {
 	stderr      io.Writer
 	getenv      func(string) string
 	interactive bool
+	color       bool // stderr is a terminal that shows colours
 	prompt      func(prompt string) ([]byte, error)
 }
 
 func newEnv() *env {
 	e := &env{stdin: os.Stdin, stdout: os.Stdout, stderr: os.Stderr, getenv: os.Getenv}
 	e.interactive = term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stderr.Fd()))
+	e.color = term.IsTerminal(int(os.Stderr.Fd())) && os.Getenv("NO_COLOR") == ""
 	if e.interactive {
 		e.prompt = func(p string) ([]byte, error) {
 			fmt.Fprint(os.Stderr, p)
@@ -141,11 +150,16 @@ func run(args []string, e *env) int {
 			return fail(e, err)
 		}
 		dir, _ := profile.Dir()
-		fmt.Fprintf(e.stdout, "profiles in %s:\n  default (built-in)\n", dir)
+		fmt.Fprintf(e.stdout, "profiles in %s:\n", anon.ShortPath(dir))
+		hasDefault := false
 		for _, n := range names {
-			if n != "default" {
-				fmt.Fprintf(e.stdout, "  %s\n", n)
-			}
+			hasDefault = hasDefault || n == "default"
+		}
+		if !hasDefault {
+			fmt.Fprintln(e.stdout, "  default (built-in, created on the first -a run)")
+		}
+		for _, n := range names {
+			fmt.Fprintf(e.stdout, "  %s\n", n)
 		}
 		return exitOK
 	}
@@ -172,9 +186,26 @@ func run(args []string, e *env) int {
 		return exitUsage
 	}
 
+	pGiven := false
+	fs.Visit(func(f *flag.Flag) { pGiven = pGiven || f.Name == "p" })
+	if aIn != "" && !pGiven {
+		// new users rarely know about profiles: give them a default one to edit
+		path, created, err := profile.EnsureDefault()
+		switch {
+		case err != nil:
+			warn(e, "no -p given: using the built-in default profile")
+		case created:
+			warn(e, "no -p given: created and using the default profile "+anon.ShortPath(path))
+		default:
+			warn(e, "no -p given: using the default profile "+anon.ShortPath(path))
+		}
+	}
 	prof, err := profile.Load(profArg)
 	if err != nil {
 		return fail(e, err)
+	}
+	if aIn != "" && len(prof.SensitiveTerms) == 0 {
+		warn(e, "no sensitive_terms in the profile: your organisation's names in URLs and text may stay visible")
 	}
 	if printProfile {
 		data, err := profile.Marshal(prof)
@@ -187,6 +218,10 @@ func run(args []string, e *env) int {
 
 	pass := app.Passphrases{Env: e.getenv(app.PassEnv), Prompt: e.prompt}
 	var progress io.Writer = e.stderr
+	st := &statusLine{w: e.stderr}
+	if e.color {
+		progress = st
+	}
 	if quiet {
 		progress = nil
 	}
@@ -197,6 +232,7 @@ func run(args []string, e *env) int {
 			Input: aIn, Output: out, Map: mapPath, Profile: prof,
 			Encrypt: prof.EncryptMap && !noEncrypt, Force: force, Pass: pass, Progress: progress,
 		})
+		st.clear()
 		if err != nil {
 			return fail(e, err)
 		}
@@ -227,6 +263,35 @@ func run(args []string, e *env) int {
 		}
 	}
 	return exitOK
+}
+
+// statusLine shows progress on one terminal line that is rewritten in place.
+type statusLine struct {
+	w     io.Writer
+	dirty bool
+}
+
+func (s *statusLine) Write(p []byte) (int, error) {
+	msg := strings.TrimSpace(string(p))
+	fmt.Fprintf(s.w, "\r\x1b[K\x1b[2m%s …\x1b[0m", msg)
+	s.dirty = true
+	return len(p), nil
+}
+
+func (s *statusLine) clear() {
+	if s.dirty {
+		fmt.Fprint(s.w, "\r\x1b[K")
+		s.dirty = false
+	}
+}
+
+// warn prints a yellow line on stderr.
+func warn(e *env, msg string) {
+	if e.color {
+		fmt.Fprintf(e.stderr, "\x1b[33m! %s\x1b[0m\n", msg)
+		return
+	}
+	fmt.Fprintf(e.stderr, "! %s\n", msg)
 }
 
 func fail(e *env, err error) int {

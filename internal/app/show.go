@@ -10,6 +10,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"log_anonimizer/internal/anon"
 	"log_anonimizer/internal/vault"
 )
 
@@ -138,6 +139,15 @@ func countTokens(path string, v *vault.Vault, counts map[string]int) error {
 	})
 }
 
+func hasSecret(rows []ShowRow) bool {
+	for _, r := range rows {
+		if r.Kind == vault.Secret {
+			return true
+		}
+	}
+	return false
+}
+
 func mask(s string) string {
 	r := []rune(s)
 	if len(r) <= 2 {
@@ -161,13 +171,13 @@ func FormatShow(r *ShowResult) string {
 	if !r.Encrypted {
 		state = "not encrypted"
 	}
-	fmt.Fprintf(&b, "map:     %s (%s, %d values)\n", r.MapPath, state, r.Total)
+	fmt.Fprintf(&b, "map      %s  (%s, %d values)\n", anon.ShortPath(r.MapPath), state, r.Total)
 	if r.UsedIn != "" {
-		distinct, total := len(r.Rows), 0
+		total := 0
 		for _, row := range r.Rows {
 			total += row.Count
 		}
-		fmt.Fprintf(&b, "used in: %s (%d distinct tokens, %d occurrences)\n", r.UsedIn, distinct, total)
+		fmt.Fprintf(&b, "used in  %s  (%d tokens, %d times)\n", anon.ShortPath(r.UsedIn), len(r.Rows), total)
 	}
 	if len(r.Rows) == 0 {
 		b.WriteString("\nnothing to show\n")
@@ -197,9 +207,9 @@ func FormatShow(r *ShowResult) string {
 		b.WriteString(line + "\n")
 	}
 	b.WriteString("\n")
-	if r.Masked {
-		b.WriteString("Secrets are partly hidden; look one up with -find SECRET_0001.\n")
+	if r.Masked && hasSecret(r.Rows) {
+		b.WriteString("Secrets are partly hidden: -find SECRET_0001 shows one.\n")
 	}
-	b.WriteString("These are the REAL values: do not paste this output where the anonymized logs go.\n")
+	b.WriteString("Real values: don't paste this where the anonymized logs go.\n")
 	return b.String()
 }

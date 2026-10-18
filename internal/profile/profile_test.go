@@ -87,12 +87,37 @@ func TestMarshalHasHelpComment(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := string(data)
-	if !strings.HasPrefix(s, "# log_anonimizer profile") || !strings.Contains(s, "sensitive_terms:") {
+	if !strings.HasPrefix(s, "# log_anonimizer profile") || !strings.Contains(s, "sensitive_terms: []") {
 		t.Errorf("unexpected YAML:\n%s", s)
 	}
 	p, err := Parse(data)
-	if err != nil || p.Anonymize != Default().Anonymize {
+	if err != nil || p.Anonymize != Default().Anonymize || len(p.SecretKeys) != len(Default().SecretKeys) {
 		t.Errorf("marshal/parse round trip: %v %v", p, err)
+	}
+	q := Default()
+	q.Name = "it's: odd"
+	q.SensitiveTerms = []string{"acme", "a,b c", "x: y", "1234"}
+	q.Anonymize.PublicIP = false
+	q.Allow.IPs = []string{"192.0.2.0/24"}
+	data, _ = Marshal(q)
+	r, err := Parse(data)
+	if err != nil || r.Name != q.Name || strings.Join(r.SensitiveTerms, "|") != "acme|a,b c|x: y|1234" || r.Anonymize.PublicIP || r.Allow.IPs[0] != "192.0.2.0/24" {
+		t.Errorf("round trip with odd values: %+v %v\n%s", r, err, data)
+	}
+}
+
+func TestEnsureDefault(t *testing.T) {
+	t.Setenv("LOGANON_PROFILE_DIR", t.TempDir())
+	path, created, err := EnsureDefault()
+	if err != nil || !created || !strings.HasSuffix(path, "default.yaml") {
+		t.Fatalf("first call: %s %v %v", path, created, err)
+	}
+	if _, created, _ := EnsureDefault(); created {
+		t.Error("second call must not overwrite")
+	}
+	p, err := Load("default")
+	if err != nil || p.Anonymize != Default().Anonymize || !p.EncryptMap {
+		t.Errorf("default file: %+v %v", p, err)
 	}
 }
 

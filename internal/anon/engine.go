@@ -209,7 +209,7 @@ func (e *Engine) Anonymize(input, output string, force bool) (*Report, error) {
 
 	// learn until no new internal domain or sensitive term shows up
 	for pass := 1; pass <= maxLearnPasses; pass++ {
-		e.logf("learning (pass %d) ...", pass)
+		e.logf("learning values (pass %d)", pass)
 		ctx := e.SC.ctxVersion
 		e.SC.SetLearning(true)
 		for _, j := range jobs {
@@ -266,7 +266,7 @@ func (e *Engine) Anonymize(input, output string, force bool) (*Report, error) {
 		j.outRel = out
 	}
 
-	e.logf("writing %s ...", output)
+	e.logf("writing output")
 	e.SC.KeptDomains = map[string]int{}
 	for _, j := range jobs {
 		fr := FileResult{Out: j.outRel, Type: j.typ.String(), Encoding: j.enc.String()}
@@ -296,7 +296,7 @@ func (e *Engine) Anonymize(input, output string, force bool) (*Report, error) {
 		rep.Files = append(rep.Files, fr)
 	}
 
-	e.logf("verifying ...")
+	e.logf("verifying")
 	var outs []verifyTarget
 	for _, j := range jobs {
 		if j.typ == ftBinary {
@@ -553,77 +553,118 @@ func fileSHA256(path string) (string, error) {
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
-// FormatReport renders a report as plain text without original values.
-func FormatReport(r *Report) string { return formatReport(r, 20, true) }
+// ShortPath shows a path relative to the current folder (or ~) when that
+// is shorter to read.
+func ShortPath(p string) string {
+	abs, err := filepath.Abs(p)
+	if err != nil {
+		return p
+	}
+	if wd, err := os.Getwd(); err == nil {
+		if rel, err := filepath.Rel(wd, abs); err == nil && !strings.HasPrefix(rel, "..") {
+			return rel
+		}
+	}
+	if home, err := os.UserHomeDir(); err == nil {
+		if rel, err := filepath.Rel(home, abs); err == nil && !strings.HasPrefix(rel, "..") {
+			return filepath.Join("~", rel)
+		}
+	}
+	return p
+}
 
-// formatReport lists at most maxSkipped skipped files (-1 = all) and, for
-// the screen, the domains kept in clear text.
-func formatReport(r *Report, maxSkipped int, withDomains bool) string {
+// FormatReport renders a report for the screen, without original values.
+func FormatReport(r *Report) string { return formatReport(r, true) }
+
+func formatReport(r *Report, screen bool) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "output:        %s\n", r.Output)
 	processed, skipped := 0, 0
+	byExt := map[string]int{}
 	for _, f := range r.Files {
 		if f.Skipped {
 			skipped++
+			ext := strings.TrimPrefix(strings.ToLower(filepath.Ext(f.Out)), ".")
+			if ext == "" || len(ext) > 8 {
+				ext = "other"
+			}
+			byExt[ext]++
 		} else {
 			processed++
 		}
 	}
-	fmt.Fprintf(&b, "files:         %d anonymized, %d skipped\n", processed, skipped)
-	fmt.Fprintf(&b, "learn passes:  %d\n", r.LearnPasses)
-	if r.PrefixChanged {
-		fmt.Fprintf(&b, "token prefix:  %q (the input already contained text that looks like tokens)\n", r.Prefix)
+	out := r.Output
+	if screen {
+		out = ShortPath(out)
 	}
-	fmt.Fprintf(&b, "replacements:")
-	any := false
+	files := "1 file"
+	if processed != 1 {
+		files = fmt.Sprintf("%d files", processed)
+	}
+	fmt.Fprintf(&b, "output    %s  (%s)\n", out, files)
+	var kinds []string
 	for _, k := range vault.Kinds {
 		if n := r.Replaced[k]; n > 0 {
-			fmt.Fprintf(&b, " %s=%d", k.Prefix(), n)
-			any = true
+			kinds = append(kinds, fmt.Sprintf("%s %d", k.Prefix(), n))
 		}
 	}
-	if !any {
-		b.WriteString(" none")
+	if len(kinds) == 0 {
+		kinds = []string{"nothing"}
 	}
-	fmt.Fprintf(&b, "\nnew values:   ")
-	for _, k := range vault.Kinds {
-		if n := r.NewEntries[k]; n > 0 {
-			fmt.Fprintf(&b, " %s=%d", k.Prefix(), n)
-		}
+	fmt.Fprintf(&b, "replaced  %s\n", strings.Join(kinds, " · "))
+	if r.PrefixChanged {
+		fmt.Fprintf(&b, "prefix    %s (the input already had text that looks like tokens)\n", r.Prefix)
 	}
-	fmt.Fprintf(&b, "  (map total %d)\n", r.TotalEntries)
 	if skipped > 0 {
-		b.WriteString("skipped binary files (not copied to the output; parse them to CSV first, e.g. EvtxECmd / RECmd / MFTECmd):\n")
-		n := 0
-		for _, f := range r.Files {
-			if !f.Skipped {
-				continue
+		exts := make([]DomainCount, 0, len(byExt))
+		for e, n := range byExt {
+			exts = append(exts, DomainCount{e, n})
+		}
+		sort.Slice(exts, func(i, j int) bool {
+			if exts[i].Count != exts[j].Count {
+				return exts[i].Count > exts[j].Count
 			}
-			if maxSkipped >= 0 && n == maxSkipped {
-				fmt.Fprintf(&b, "  ... and %d more (all listed in ANONYMIZATION_REPORT.txt)\n", skipped-n)
+			return exts[i].Domain < exts[j].Domain
+		})
+		var parts []string
+		for i, e := range exts {
+			if i == 5 {
+				parts = append(parts, "…")
 				break
 			}
-			fmt.Fprintf(&b, "  - %s\n", f.Out)
-			n++
+			parts = append(parts, fmt.Sprintf("%s %d", e.Domain, e.Count))
+		}
+		fmt.Fprintf(&b, "skipped   %d binary files (%s): convert them to CSV first\n", skipped, strings.Join(parts, ", "))
+		if !screen {
+			for _, f := range r.Files {
+				if f.Skipped {
+					fmt.Fprintf(&b, "          - %s\n", f.Out)
+				}
+			}
 		}
 	}
 	if r.LeakCount == 0 {
-		b.WriteString("verify:        OK - no known original value found in the output\n")
+		b.WriteString("verify    OK\n")
 	} else {
-		fmt.Fprintf(&b, "verify:        FAILED - %d occurrence(s) of original values remain:\n", r.LeakCount)
-		for _, l := range r.Leaks {
-			fmt.Fprintf(&b, "  - %s:%d  %s (%s)\n", l.File, l.Line, l.Token, l.Kind)
+		fmt.Fprintf(&b, "verify    FAILED: %d original value(s) left\n", r.LeakCount)
+		for i, l := range r.Leaks {
+			if screen && i == 5 {
+				break
+			}
+			fmt.Fprintf(&b, "          %s:%d  %s\n", l.File, l.Line, l.Token)
 		}
 	}
-	fmt.Fprintf(&b, "time:          %s\n", r.Duration.Round(time.Millisecond))
-	if withDomains && len(r.KeptDomains) > 0 {
-		b.WriteString("\ndomains kept in clear text (external domains are kept as IOCs).\n")
-		b.WriteString("If one of these is your organisation's, add it to sensitive_terms and run again:\n")
-		for _, d := range r.KeptDomains {
-			fmt.Fprintf(&b, "  %9d  %s\n", d.Count, d.Domain)
-		}
-		if r.NoTerms {
-			b.WriteString("(no sensitive terms were set: names that appear only in URLs or free text cannot be recognised)\n")
+	if screen {
+		fmt.Fprintf(&b, "time      %s\n", r.Duration.Round(time.Millisecond))
+		if len(r.KeptDomains) > 0 {
+			var ds []string
+			for i, d := range r.KeptDomains {
+				if i == 5 {
+					break
+				}
+				ds = append(ds, fmt.Sprintf("%s %d", d.Domain, d.Count))
+			}
+			fmt.Fprintf(&b, "kept      %s\n", strings.Join(ds, ", "))
+			b.WriteString("          (external domains stay as IOCs; if one is yours, add it to sensitive_terms)\n")
 		}
 	}
 	return b.String()
@@ -635,7 +676,7 @@ func writeReportFile(path string, r *Report) error {
 	fmt.Fprintf(&b, "created: %s\n", time.Now().UTC().Format(time.RFC3339))
 	cp := *r
 	cp.Output = filepath.Base(r.Output)
-	b.WriteString(formatReport(&cp, -1, false))
+	b.WriteString(formatReport(&cp, false))
 	b.WriteString("\nTokens look like HOST_0001, USER_0001, IP_0001 (internal), EXTIP_0001 (public).\n")
 	b.WriteString("The same original value always has the same token across all files.\n")
 	return os.WriteFile(path, []byte(b.String()), 0o644)

@@ -195,24 +195,20 @@ func FormatAnon(r *AnonResult) string {
 	if !r.Encrypted {
 		state = "NOT encrypted"
 	}
-	verb := "written"
 	if r.MapReused {
-		verb = "updated"
+		state += ", updated"
 	}
-	fmt.Fprintf(&b, "map:           %s (%s, %s)\n", r.MapPath, verb, state)
-	b.WriteString("\nKeep the .anonmap file private: it turns tokens back into the real values.\n")
-	b.WriteString("Share only the anonymized output.\n")
+	fmt.Fprintf(&b, "map       %s  (%s; keep it private, never share it)\n", anon.ShortPath(r.MapPath), state)
 	return b.String()
 }
 
 // FormatRestore renders the result of Restore.
 func FormatRestore(r *anon.RestoreReport) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "output:   %s\n", r.Output)
-	fmt.Fprintf(&b, "files:    %d\n", r.Files)
-	fmt.Fprintf(&b, "restored: %d token(s)\n", r.Replaced)
+	fmt.Fprintf(&b, "output    %s\n", anon.ShortPath(r.Output))
+	fmt.Fprintf(&b, "restored  %d tokens\n", r.Replaced)
 	if r.Unknown > 0 {
-		fmt.Fprintf(&b, "unknown:  %d token(s) not in this map, left as they are: %s\n", r.Unknown, strings.Join(r.UnknownTokens, ", "))
+		fmt.Fprintf(&b, "unknown   %s (not in this map, left as-is)\n", strings.Join(r.UnknownTokens, ", "))
 	}
 	return b.String()
 }

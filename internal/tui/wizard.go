@@ -186,31 +186,30 @@ func toggleItems(t *profile.Toggles) []toggleItem {
 	}
 }
 
+// pickProfile uses the default profile (creating default.yaml on first use)
+// and asks only when the user has saved other profiles.
 func (w *wizard) pickProfile() (*profile.Profile, string, error) {
+	profile.EnsureDefault()
 	names, err := profile.List()
-	if err != nil || len(names) == 0 {
-		return profile.Default(), "", nil
-	}
-	opts := []string{"default (built-in)"}
-	hasDefault := false
-	for _, n := range names {
-		if n == "default" {
-			hasDefault = true
-			opts[0] = "default"
-			continue
+	if err != nil || len(names) <= 1 {
+		p, err := profile.Load("default")
+		if err != nil {
+			return profile.Default(), "", nil
 		}
-		opts = append(opts, n)
+		return p, "default", nil
+	}
+	opts := []string{"default"}
+	for _, n := range names {
+		if n != "default" {
+			opts = append(opts, n)
+		}
 	}
 	i, err := w.u.selectOne("Profile", opts, 0)
 	if err != nil {
 		return nil, "", err
 	}
-	name := strings.TrimSuffix(opts[i], " (built-in)")
-	if i == 0 && !hasDefault {
-		return profile.Default(), "", nil
-	}
-	p, err := profile.Load(name)
-	return p, name, err
+	p, err := profile.Load(opts[i])
+	return p, opts[i], err
 }
 
 func (w *wizard) newPassphrase() (string, error) {
@@ -317,6 +316,9 @@ func (w *wizard) anonymize() int {
 	} else {
 		prof.SensitiveTerms = profile.ParseTerms(termsStr)
 	}
+	if len(prof.SensitiveTerms) == 0 {
+		u.println(sYellow + "  ! no sensitive terms: your organisation's names in URLs and text may stay visible" + sReset)
+	}
 
 	mapChoice, err := u.selectOne("Map file", []string{
 		"Create a new map",
@@ -363,11 +365,7 @@ func (w *wizard) anonymize() int {
 
 	saveName := ""
 	if profName == "" || !sameOptions(prof, base) {
-		def := ""
-		if profName != "" {
-			def = profName
-		}
-		saveName, err = u.input("Save these options as a profile? name", inputOpts{def: def, shown: either(def == "", "don't save", def),
+		saveName, err = u.input("Save these options as a profile? name", inputOpts{shown: "don't save",
 			validate: func(s string) error {
 				if s != "" && !profile.ValidName(s) {
 					return errors.New("use letters, digits, - _ .")
@@ -392,10 +390,15 @@ func (w *wizard) anonymize() int {
 		if err != nil {
 			return w.cancelled(err)
 		}
-		w.say(sDim + "  profile saved: " + path + sReset)
+		w.say(sDim + "  profile saved: " + anon.ShortPath(path) + sReset)
 		profName, effective = saveName, prof
 	} else if !sameOptions(prof, base) {
-		profName, effective = "", profile.Default()
+		profName = ""
+		if d, err := profile.Load("default"); err == nil {
+			effective = d
+		} else {
+			effective = profile.Default()
+		}
 	}
 
 	w.leaveRaw()
@@ -436,8 +439,8 @@ func (w *wizard) anonymize() int {
 	}
 	fmt.Fprintln(w.o.Out, "\nSame run from the command line:")
 	fmt.Fprintln(w.o.Out, "  "+strings.Join(cmd, " "))
-	if profName == "" && !sameOptions(prof, profile.Default()) {
-		fmt.Fprintln(w.o.Out, "  (your options were not saved as a profile, so this command uses the defaults)")
+	if profName == "" && !sameOptions(prof, effective) {
+		fmt.Fprintln(w.o.Out, "  (options not saved, so this command uses the default profile)")
 	}
 	if res.Report.LeakCount > 0 {
 		return 3

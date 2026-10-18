@@ -231,8 +231,13 @@ func (sc *Scanner) renderParts(b *strings.Builder, ps []part) {
 			b.WriteString(p.text)
 			continue
 		}
-		b.WriteString(sc.tokenFor(p.kind, p.text))
-		sc.Replaced[p.kind]++
+		tok := sc.tokenFor(p.kind, p.text)
+		b.WriteString(tok)
+		k := p.kind
+		if e, ok := sc.v.Lookup(tok); ok {
+			k = e.Kind // count under the kind the token was created with
+		}
+		sc.Replaced[k]++
 	}
 }
 

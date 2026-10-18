@@ -252,7 +252,7 @@ func TestWizardVerifyAndCancel(t *testing.T) {
 	dir, in := setup(t)
 	runWizard(t, enter+in+enter+enter+enter+enter+down+enter+enter+enter+enter, nil)
 	code, out := runWizard(t, down+down+enter+filepath.Join(dir, "fw.anon.log")+enter+enter, nil)
-	if code != 0 || !strings.Contains(out, "known values:  OK") {
+	if code != 0 || !strings.Contains(out, "map       OK") {
 		t.Errorf("verify exit %d\n%s", code, out)
 	}
 	if code, out := runWizard(t, "\x03", nil); code != 130 || !strings.Contains(out, "cancelled") {

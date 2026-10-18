@@ -8,6 +8,9 @@ import (
 	"golang.org/x/sys/windows"
 )
 
+// SetupConsole enables colours on a Windows console (see setupConsole).
+func SetupConsole(out *os.File) func() { return setupConsole(out) }
+
 // setupConsole enables ANSI escape sequences and UTF-8 output on the Windows
 // console and returns a function that restores the previous state.
 func setupConsole(out *os.File) func() {

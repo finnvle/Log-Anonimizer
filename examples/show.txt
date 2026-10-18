@@ -1,5 +1,5 @@
-map:     sample.anonmap (not encrypted, 25 values)
-used in: sample.anon.log (25 distinct tokens, 45 occurrences)
+map      sample.anonmap  (not encrypted, 25 values)
+used in  sample.anon.log  (25 tokens, 45 times)
 
 INTERNAL IP ADDRESSES
   IP_0001      10.20.1.15                           1×
@@ -44,5 +44,5 @@ SECRETS
 DEVICE IDS
   DEVICE_0001  4f2a9c71b3e84d0f                     1×
 
-Secrets are partly hidden; look one up with -find SECRET_0001.
-These are the REAL values: do not paste this output where the anonymized logs go.
+Secrets are partly hidden: -find SECRET_0001 shows one.
+Real values: don't paste this where the anonymized logs go.
