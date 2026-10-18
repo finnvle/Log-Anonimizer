@@ -47,6 +47,8 @@ go build -o log_anonimizer ./cmd/log_anonimizer   # this machine
 ./log_anonimizer
 ```
 
+![The TUI asking what to anonymize](img/img3.png)
+
 
 ## CLI Usage
 
