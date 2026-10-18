@@ -126,7 +126,6 @@ For scripts only, where nobody can type, put it in the `LOGANON_PASSPHRASE` envi
 | `-version` | print the version |
 | `-h` | help |
 
-Exit codes: `0` ok, `1` error, `2` usage, `3` real values found in the output.
 
 ## Profiles
 
