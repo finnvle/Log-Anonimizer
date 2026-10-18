@@ -13,9 +13,27 @@ before:  Oct 10 08:15:02 fw-edge01 sshd[2211]: Accepted password for somchai.k f
 after:   Oct 10 08:15:02 HOST_0001 sshd[2211]: Accepted password for USER_0001 from EXTIP_0001
 ```
 
+![sample.log (left) and the same log after -a (right)](img/img2.png)
+
 ## Install
 
-Build with [Go](https://go.dev/dl/) 1.26+:
+### Download
+
+Get the file for your system from the [latest release](https://github.com/finnvle/Log-Anonimizer/releases/latest):
+
+| File | For |
+|---|---|
+| `log_anonimizer_<version>_windows_amd64.exe` | Windows 10/11, Server 2016+ |
+| `log_anonimizer_<version>_windows_arm64.exe` | Windows on ARM |
+| `log_anonimizer_<version>_linux_amd64` / `_linux_arm64` | Linux |
+| `log_anonimizer_<version>_darwin_arm64` / `_darwin_amd64` | macOS Apple Silicon / Intel |
+
+Rename it to `log_anonimizer` (`log_anonimizer.exe` on Windows). To check the download,
+compare it with `SHA256SUMS` from the same release.
+
+### Build from source
+
+Needs [Go](https://go.dev/dl/) 1.26+:
 
 ```bash
 git clone https://github.com/finnvle/Log-Anonimizer.git
@@ -23,11 +41,8 @@ cd Log-Anonimizer
 go build -o log_anonimizer ./cmd/log_anonimizer   # this machine
 
 # Build for all platforms into dist/
-./scripts/build.sh                                 
+./scripts/build.sh
 ```
-
-
-Rename the file to `log_anonimizer` (`log_anonimizer.exe` on Windows).
 
 ## Usage
 
@@ -130,6 +145,10 @@ Profile folder: `%AppData%\log_anonimizer\profiles` (Windows),
 | [`sample.restored.log`](examples/sample.restored.log) | after `-d`, identical to the input |
 | [`show.txt`](examples/show.txt) | `-show sample.anon.log` |
 | [`sample.anonmap`](examples/sample.anonmap) | the map, unencrypted only for the demo |
+
+A LogRhythm CSV export after `-a`: addresses and hostnames become tokens, the columns stay as they were.
+
+![LogRhythm CSV columns after -a](img/img1.png)
 
 ```
 in:   copy C:\Users\somchai.k\Desktop\salary-2026.xlsx to \\FS-ACME02\finance\ by ACME\somchai.k
