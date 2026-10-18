@@ -16,7 +16,7 @@ import (
 )
 
 // Version of the tool.
-const Version = "0.2.4"
+const Version = "0.3.0"
 
 // PassEnv is the environment variable that holds the map passphrase.
 const PassEnv = "LOGANON_PASSPHRASE"
