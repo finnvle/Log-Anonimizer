@@ -28,8 +28,6 @@ Get the file for your system from the [latest release](https://github.com/finnvl
 | `log_anonimizer_<version>_linux_amd64` / `_linux_arm64` | Linux |
 | `log_anonimizer_<version>_darwin_arm64` / `_darwin_amd64` | macOS Apple Silicon / Intel |
 
-Rename it to `log_anonimizer` (`log_anonimizer.exe` on Windows). To check the download,
-compare it with `SHA256SUMS` from the same release.
 
 ### Build from source
 
