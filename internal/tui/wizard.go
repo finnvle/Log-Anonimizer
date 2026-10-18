@@ -296,18 +296,19 @@ func (w *wizard) anonymize() int {
 	}
 
 	termsDef := strings.Join(prof.SensitiveTerms, ", ")
-	termsStr, err := u.input("Sensitive terms - org names, project codes, internal domains (comma separated, - = none)",
-		inputOpts{def: termsDef, shown: termsDef, validate: func(s string) error {
-			if s == "-" {
-				return nil
-			}
-			for _, t := range profile.ParseTerms(s) {
-				if len(t) < 3 {
-					return fmt.Errorf("%q is shorter than 3 characters", t)
+	termsStr, err := u.input("Sensitive terms",
+		inputOpts{def: termsDef, shown: termsDef, hint: "org names, project codes, internal domains · e.g. acme, acme.co.th · - = none",
+			validate: func(s string) error {
+				if s == "-" {
+					return nil
 				}
-			}
-			return nil
-		}})
+				for _, t := range profile.ParseTerms(s) {
+					if len(t) < 3 {
+						return fmt.Errorf("%q is shorter than 3 characters", t)
+					}
+				}
+				return nil
+			}})
 	if err != nil {
 		return w.cancelled(err)
 	}
@@ -365,7 +366,7 @@ func (w *wizard) anonymize() int {
 
 	saveName := ""
 	if profName == "" || !sameOptions(prof, base) {
-		saveName, err = u.input("Save these options as a profile? name", inputOpts{shown: "don't save",
+		saveName, err = u.input("Save as profile", inputOpts{shown: "don't save", hint: "a name such as acme, to reuse these options with -p acme",
 			validate: func(s string) error {
 				if s != "" && !profile.ValidName(s) {
 					return errors.New("use letters, digits, - _ .")
@@ -452,7 +453,7 @@ func (w *wizard) anonymize() int {
 
 func (w *wizard) restore() int {
 	u := w.u
-	in, err := u.input("Anonymized file or folder (or a report that contains tokens)", inputOpts{path: true, validate: mustExist})
+	in, err := u.input("File or folder to restore", inputOpts{path: true, hint: "anonymized output, or any text with tokens such as a report", validate: mustExist})
 	if err != nil {
 		return w.cancelled(err)
 	}
@@ -503,7 +504,8 @@ func (w *wizard) verify() int {
 		return w.cancelled(err)
 	}
 	def := app.FindMap(path)
-	mapPath, err := u.input("Map file (checks every known original value)", inputOpts{def: def, shown: either(def == "", "none - detectors only", def), path: true,
+	mapPath, err := u.input("Map file", inputOpts{def: def, shown: either(def == "", "none - detectors only", def), path: true,
+		hint: "with a map, every known real value is searched for",
 		validate: func(s string) error {
 			if s == "" {
 				return nil
@@ -539,7 +541,7 @@ func (w *wizard) verify() int {
 
 func (w *wizard) show() int {
 	u := w.u
-	target, err := u.input("Map file, or an anonymized file or folder", inputOpts{path: true, validate: mustExist})
+	target, err := u.input("Map or anonymized file", inputOpts{path: true, hint: "a .anonmap, or an anonymized file or folder (its map is found next to it)", validate: mustExist})
 	if err != nil {
 		return w.cancelled(err)
 	}
@@ -556,7 +558,7 @@ func (w *wizard) show() int {
 	if err != nil {
 		return w.cancelled(err)
 	}
-	find, err := u.input("Only tokens or values containing", inputOpts{shown: "everything"})
+	find, err := u.input("Filter", inputOpts{shown: "show everything", hint: "only tokens or values containing this text, e.g. somchai or HOST_0003"})
 	if err != nil {
 		return w.cancelled(err)
 	}

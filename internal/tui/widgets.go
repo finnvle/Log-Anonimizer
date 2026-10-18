@@ -30,6 +30,7 @@ type ui struct {
 	out   io.Writer
 	width int
 	prev  int // lines drawn by the active widget
+	up    int // lines the cursor was moved up from the last drawn line
 }
 
 // fit cuts a line to the terminal width so redrawing stays aligned.
@@ -86,9 +87,10 @@ func visibleLen(s string) int {
 
 func (u *ui) draw(lines []string) {
 	var b strings.Builder
-	if u.prev > 1 {
-		fmt.Fprintf(&b, "\x1b[%dA", u.prev-1)
+	if n := u.prev - 1 - u.up; n > 0 {
+		fmt.Fprintf(&b, "\x1b[%dA", n)
 	}
+	u.up = 0
 	b.WriteString("\r\x1b[J")
 	for i, l := range lines {
 		if i > 0 {
@@ -100,8 +102,55 @@ func (u *ui) draw(lines []string) {
 	u.prev = len(lines)
 }
 
-// commit replaces the widget by a one-line answer.
+// cursorTo puts the terminal cursor on a drawn line (0 = first) after col
+// visible characters, so it blinks where the user types.
+func (u *ui) cursorTo(row, col int) {
+	up := u.prev - 1 - row
+	if up <= 0 && col <= 0 {
+		return
+	}
+	var b strings.Builder
+	if up > 0 {
+		fmt.Fprintf(&b, "\x1b[%dA", up)
+	}
+	b.WriteString("\r")
+	if col > 0 {
+		fmt.Fprintf(&b, "\x1b[%dC", col)
+	}
+	io.WriteString(u.out, b.String())
+	u.up = up
+}
+
+// tail keeps the end of s within room characters: the end is where the
+// typing happens.
+func tail(s string, room int) string {
+	r := []rune(s)
+	if len(r) <= room || room < 2 {
+		return s
+	}
+	return "…" + string(r[len(r)-room+1:])
+}
+
+// head keeps the start of s within room characters.
+func head(s string, room int) string {
+	r := []rune(s)
+	if len(r) <= room || room < 2 {
+		return s
+	}
+	return string(r[:room-1]) + "…"
+}
+
+// commit replaces the widget by a one-line answer. On a narrow screen the
+// title is shortened, not the answer.
 func (u *ui) commit(title, answer string) {
+	max := u.width - 1
+	if room := max - 2 - 1 - utf8.RuneCountInString(answer); utf8.RuneCountInString(title) > room {
+		if room < 12 {
+			room = 12
+			answer = tail(answer, max-2-1-room)
+		}
+		title = head(title, room)
+	}
 	u.draw([]string{sGreen + "* " + sReset + sBold + title + sReset + " " + sCyan + answer + sReset})
 	io.WriteString(u.out, "\r\n")
 	u.prev = 0
@@ -232,6 +281,7 @@ func (u *ui) multiSelect(title string, items []checkItem) ([]checkItem, error) {
 type inputOpts struct {
 	def      string // used when the answer is empty
 	shown    string // what to show for an empty default
+	hint     string // dim line under the question
 	path     bool   // tab completion of paths
 	mask     bool   // hide what is typed
 	validate func(string) error
@@ -246,24 +296,34 @@ func (u *ui) input(title string, o inputOpts) (string, error) {
 		if o.mask {
 			shown = strings.Repeat("*", len(buf))
 		}
-		head := sBold + "? " + title + sReset
+		q := sBold + "? " + title + sReset
 		if o.def != "" || o.shown != "" {
 			d := o.shown
 			if d == "" {
 				d = o.def
 			}
-			head += sDim + " [" + d + "]" + sReset
+			q += sDim + " [" + d + "]" + sReset
 		}
-		// long paths: show the end, where the typing happens
-		if room := u.width - 1 - visibleLen(head) - 2; room > 10 && utf8.RuneCountInString(shown) > room {
-			r := []rune(shown)
-			shown = "…" + string(r[len(r)-room+1:])
+		// The typed text must always be visible. If the question leaves
+		// too little room, the text goes on its own line; long text shows
+		// its end, where the typing happens.
+		var lines []string
+		row := 0
+		if room := u.width - 1 - visibleLen(q) - 1; room >= 16 {
+			lines = []string{q + " " + tail(shown, room)}
+		} else {
+			lines = []string{q, sCyan + "  › " + sReset + tail(shown, u.width-1-4)}
+			row = 1
 		}
-		lines := []string{head + " " + shown}
 		if msg != "" {
 			lines = append(lines, msg)
+		} else if o.hint != "" {
+			lines = append(lines, sDim+"  "+o.hint+sReset)
 		}
 		u.draw(lines)
+		if len(lines) > 1 {
+			u.cursorTo(row, visibleLen(lines[row]))
+		}
 		k, err := u.keys.next()
 		if err != nil {
 			return "", err

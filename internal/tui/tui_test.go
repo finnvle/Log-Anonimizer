@@ -2,6 +2,7 @@ package tui
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -269,5 +270,106 @@ func TestWizardShow(t *testing.T) {
 	code, out := runWizard(t, down+down+down+enter+filepath.Join(dir, "fw.anon.log")+enter+enter+enter, nil)
 	if code != 0 || !strings.Contains(out, "USER_0001") || !strings.Contains(out, "jdoe") || !strings.Contains(out, "-show ") {
 		t.Errorf("exit %d\n%s", code, out)
+	}
+}
+
+// screen replays terminal output (cursor moves, clears) and returns the
+// lines a user would see.
+func screen(out string) []string {
+	var lines [][]rune
+	row, col := 0, 0
+	at := func() {
+		for len(lines) <= row {
+			lines = append(lines, nil)
+		}
+	}
+	rs := []rune(out)
+	for i := 0; i < len(rs); i++ {
+		at()
+		switch c := rs[i]; {
+		case c == 0x1b && i+1 < len(rs) && rs[i+1] == '[':
+			j := i + 2
+			for j < len(rs) && !(rs[j] >= 0x40 && rs[j] <= 0x7e) {
+				j++
+			}
+			n := 1
+			if j > i+2 {
+				fmt.Sscanf(string(rs[i+2:j]), "%d", &n)
+			}
+			switch rs[j] {
+			case 'A':
+				row -= n
+			case 'C':
+				col += n
+			case 'K':
+				if col < len(lines[row]) {
+					lines[row] = lines[row][:col]
+				}
+			case 'J':
+				if col < len(lines[row]) {
+					lines[row] = lines[row][:col]
+				}
+				lines = lines[:row+1]
+			}
+			i = j
+		case c == '\r':
+			col = 0
+		case c == '\n':
+			row++
+		default:
+			for len(lines[row]) < col {
+				lines[row] = append(lines[row], ' ')
+			}
+			if col < len(lines[row]) {
+				lines[row][col] = c
+			} else {
+				lines[row] = append(lines[row], c)
+			}
+			col++
+		}
+	}
+	var res []string
+	for _, l := range lines {
+		res = append(res, strings.TrimRight(string(l), " "))
+	}
+	return res
+}
+
+func TestTypedTextStaysVisible(t *testing.T) {
+	long := "Sensitive terms - org names, project codes, internal domains (comma separated, - = none)"
+	for _, c := range []struct {
+		width int
+		title string
+	}{{40, long}, {80, long}, {80, "Sensitive terms"}, {30, "Sensitive terms"}} {
+		var out bytes.Buffer
+		u := &ui{keys: newKeyReader(strings.NewReader("acme, acme.co.th")), out: &out, width: c.width}
+		u.input(c.title, inputOpts{hint: "org names, project codes, internal domains · e.g. acme, acme.co.th · - = none"})
+		lines := screen(out.String())
+		typing := false
+		for _, l := range lines {
+			if len([]rune(l)) > c.width-1 {
+				t.Errorf("width %d: line wider than the screen: %q", c.width, l)
+			}
+			typing = typing || strings.HasSuffix(l, "acme, acme.co.th")
+		}
+		if !typing {
+			t.Errorf("width %d %q: typed text not visible:\n%s", c.width, c.title, strings.Join(lines, "\n"))
+		}
+
+		out.Reset()
+		u = &ui{keys: newKeyReader(strings.NewReader("acme, acme.co.th\r")), out: &out, width: c.width}
+		v, _ := u.input(c.title, inputOpts{hint: "a hint"})
+		lines = screen(out.String())
+		last := lines[len(lines)-1]
+		if last == "" && len(lines) > 1 {
+			last = lines[len(lines)-2]
+		}
+		want := "acme, acme.co.th"
+		if c.width < 40 {
+			want = "acme.co.th" // very narrow: the start of a long answer is cut
+		}
+		if v != "acme, acme.co.th" || !strings.HasSuffix(last, want) || strings.Contains(strings.Join(lines, "\n"), "a hint") {
+			t.Errorf("width %d: answer line %q (value %q), screen:\n%s", c.width, last, v, strings.Join(lines, "\n"))
+		}
 	}
 }
