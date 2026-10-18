@@ -53,7 +53,6 @@ Unblock-File .\log_anonimizer.exe          # if SmartScreen blocks it
 .\log_anonimizer.exe -a export.csv -p acme
 .\log_anonimizer.exe -d export.anon.csv
 .\log_anonimizer.exe -show export.anon.csv
-$env:LOGANON_PASSPHRASE = "a long passphrase"   # optional, for scripts
 ```
 
 ### Linux
@@ -62,7 +61,6 @@ $env:LOGANON_PASSPHRASE = "a long passphrase"   # optional, for scripts
 chmod +x log_anonimizer
 ./log_anonimizer -a auth.log -p acme
 ./log_anonimizer -d auth.anon.log
-export LOGANON_PASSPHRASE='a long passphrase'   # optional, for scripts
 ```
 
 ### macOS
@@ -73,6 +71,18 @@ xattr -d com.apple.quarantine log_anonimizer    # if Gatekeeper blocks it
 ./log_anonimizer -a export.csv -p acme
 ./log_anonimizer -d export.anon.csv
 ```
+
+### Passphrase
+
+There is nothing to set up. `-a` asks for a passphrase to lock the map (typing is hidden):
+
+```
+New map passphrase (min 8 chars): ********
+Repeat passphrase: ********
+```
+
+`-d`, `-show` and `-verify` ask for it again. If you forget it, the map cannot be opened.
+For scripts only, where nobody can type, put it in the `LOGANON_PASSPHRASE` environment variable.
 
 ### Options
 
