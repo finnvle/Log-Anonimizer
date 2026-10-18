@@ -139,8 +139,13 @@ func TestEncryptedNeedsPassphrase(t *testing.T) {
 
 func TestProfiles(t *testing.T) {
 	in := logFile(t)
-	if r := cli(t, nil, "-print-profile"); r.code != 0 || !strings.Contains(r.stdout, "sensitive_terms:") {
-		t.Errorf("-print-profile: %+v", r)
+	if r := cli(t, nil, "-print-profile"); r.code != exitUsage {
+		t.Errorf("-print-profile was removed: %+v", r)
+	}
+	// before any run there is no file yet: the built-in default is listed
+	r := cli(t, nil, "-profiles")
+	if r.code != 0 || !strings.Contains(r.stdout, "default  sensitive_terms: (none)") || !strings.Contains(r.stdout, "built in") {
+		t.Errorf("-profiles before a run:\n%s", r.stdout)
 	}
 	if r := cli(t, nil, "-a", in, "-p", "missing"); r.code != exitError {
 		t.Errorf("missing profile: %+v", r)
@@ -154,8 +159,24 @@ func TestProfiles(t *testing.T) {
 	if !strings.Contains(string(got), "from 203.0.113.50 port") {
 		t.Errorf("public IP should be kept by the profile: %q", got)
 	}
-	if r := cli(t, nil, "-profiles"); r.code != 0 || !strings.Contains(r.stdout, "default") {
-		t.Errorf("-profiles: %+v", r)
+	dir, _ := profile.Dir()
+	os.MkdirAll(dir, 0o700)
+	os.WriteFile(filepath.Join(dir, "acme.yaml"), []byte("sensitive_terms: [acme, acme.co.th]\nanonymize:\n  public_ip: false\n"), 0o600)
+	os.WriteFile(filepath.Join(dir, "broken.yaml"), []byte("anonymise: {}\n"), 0o600)
+	r = cli(t, nil, "-profiles")
+	out := r.stdout
+	for _, want := range []string{
+		"acme     sensitive_terms: acme, acme.co.th",
+		"public IPs: kept    map: encrypted",
+		"broken   cannot read it",
+		"copy default.yaml",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("-profiles missing %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "unmarshal") || strings.Count(out, "\n") != 6 {
+		t.Errorf("the error for a broken profile should be one short line:\n%s", out)
 	}
 }
 

@@ -91,8 +91,7 @@ Options:
   -no-encrypt     write the map as plain JSON (not recommended)
   -f              overwrite existing output and map
   -q              no progress messages
-  -profiles       list saved profiles
-  -print-profile  print the effective profile as YAML (save it, edit it, use -p file.yaml)
+  -profiles       list your profiles, their main settings and where they are
   -version        print the version
   -h              this help
 
@@ -114,7 +113,7 @@ func run(args []string, e *env) int {
 		out, mapPath, profArg string
 		noEncrypt, force      bool
 		quiet, listProfiles   bool
-		printProfile, showVer bool
+		showVer               bool
 		interactive           bool
 	)
 	fs.StringVar(&aIn, "a", "", "")
@@ -129,7 +128,6 @@ func run(args []string, e *env) int {
 	fs.BoolVar(&force, "f", false, "")
 	fs.BoolVar(&quiet, "q", false, "")
 	fs.BoolVar(&listProfiles, "profiles", false, "")
-	fs.BoolVar(&printProfile, "print-profile", false, "")
 	fs.BoolVar(&showVer, "version", false, "")
 	fs.BoolVar(&interactive, "i", false, "")
 	if err := fs.Parse(args); err != nil {
@@ -148,22 +146,11 @@ func run(args []string, e *env) int {
 		return exitOK
 	}
 	if listProfiles {
-		names, err := profile.List()
+		out, err := formatProfiles()
 		if err != nil {
 			return fail(e, err)
 		}
-		dir, _ := profile.Dir()
-		fmt.Fprintf(e.stdout, "profiles in %s:\n", anon.ShortPath(dir))
-		hasDefault := false
-		for _, n := range names {
-			hasDefault = hasDefault || n == "default"
-		}
-		if !hasDefault {
-			fmt.Fprintln(e.stdout, "  default (built-in, created on the first -a run)")
-		}
-		for _, n := range names {
-			fmt.Fprintf(e.stdout, "  %s\n", n)
-		}
+		fmt.Fprint(e.stdout, out)
 		return exitOK
 	}
 
@@ -173,7 +160,7 @@ func run(args []string, e *env) int {
 			modes++
 		}
 	}
-	if modes == 0 && !printProfile {
+	if modes == 0 {
 		if interactive || len(args) == 0 {
 			if !e.interactive {
 				fs.Usage()
@@ -210,15 +197,6 @@ func run(args []string, e *env) int {
 	if aIn != "" && len(prof.SensitiveTerms) == 0 {
 		warn(e, "no sensitive_terms in the profile: your organisation's names in URLs and text may stay visible")
 	}
-	if printProfile {
-		data, err := profile.Marshal(prof)
-		if err != nil {
-			return fail(e, err)
-		}
-		e.stdout.Write(data)
-		return exitOK
-	}
-
 	pass := app.Passphrases{Env: e.getenv(app.PassEnv), Prompt: e.prompt, Notice: func(msg string) { warn(e, msg) }}
 	var progress io.Writer = e.stderr
 	st := &statusLine{w: e.stderr}
@@ -286,6 +264,68 @@ func (s *statusLine) clear() {
 		fmt.Fprint(s.w, "\r\x1b[K")
 		s.dirty = false
 	}
+}
+
+// formatProfiles lists the saved profiles with their main settings, so users
+// can see what -p <name> would do without opening the files.
+func formatProfiles() (string, error) {
+	names, err := profile.List()
+	if err != nil {
+		return "", err
+	}
+	dir, _ := profile.Dir()
+	var b strings.Builder
+	fmt.Fprintf(&b, "profiles in %s\n", anon.ShortPath(dir))
+	hasDefault := false
+	for _, n := range names {
+		hasDefault = hasDefault || n == "default"
+	}
+	if !hasDefault {
+		names = append([]string{"default"}, names...)
+	}
+	type row struct{ name, terms, pub, enc, note, err string }
+	var rows []row
+	nameW, termsW := 0, 0
+	for _, n := range names {
+		r := row{name: n, pub: "hidden", enc: "encrypted"}
+		p, err := profile.Load(n)
+		if err != nil {
+			// "yaml: unmarshal errors:\n  line 1: field x not found ..." -> the last line
+			lines := strings.Split(strings.TrimSpace(err.Error()), "\n")
+			r.err = strings.TrimSpace(lines[len(lines)-1])
+		} else {
+			r.terms = "(none)"
+			if len(p.SensitiveTerms) > 0 {
+				r.terms = strings.Join(p.SensitiveTerms, ", ")
+				if rs := []rune(r.terms); len(rs) > 28 {
+					r.terms = string(rs[:27]) + "…"
+				}
+			}
+			if !p.Anonymize.PublicIP {
+				r.pub = "kept"
+			}
+			if !p.EncryptMap {
+				r.enc = "plain"
+			}
+			if n == "default" && !hasDefault {
+				r.note = "  (built in; saved as default.yaml on the first -a run)"
+			}
+			termsW = max(termsW, len([]rune(r.terms)))
+		}
+		nameW = max(nameW, len(n))
+		rows = append(rows, r)
+	}
+	for _, r := range rows {
+		if r.err != "" {
+			fmt.Fprintf(&b, "  %-*s  cannot read it: %s\n", nameW, r.name, r.err)
+			continue
+		}
+		pad := strings.Repeat(" ", termsW-len([]rune(r.terms)))
+		fmt.Fprintf(&b, "  %-*s  sensitive_terms: %s%s  public IPs: %-6s  map: %s%s\n", nameW, r.name, r.terms, pad, r.pub, r.enc, r.note)
+	}
+	b.WriteString("Edit a profile in its .yaml file (every option is explained there).\n")
+	b.WriteString("For a new one, copy default.yaml to <name>.yaml and run with -p <name>.\n")
+	return b.String(), nil
 }
 
 // warn prints a yellow line on stderr.

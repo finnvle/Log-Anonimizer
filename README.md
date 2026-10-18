@@ -123,8 +123,7 @@ For scripts only, where nobody can type, put it in the `LOGANON_PASSPHRASE` envi
 | `-f` | overwrite existing output and map |
 | `-q` | no progress messages |
 | `-no-encrypt` | plain map (not recommended) |
-| `-profiles` | list saved profiles |
-| `-print-profile` | print a profile with comments (add `-p` for another one) |
+| `-profiles` | list your profiles with their main settings |
 | `-version` | print the version |
 | `-h` | help |
 
@@ -145,9 +144,18 @@ anonymize:
   public_ip: false   # keep attackers' IPs as IOCs
 ```
 
-Save an individual profile and run with `-p acme.yaml`.
+Save a profile per customer as `acme.yaml` in the profile folder (copy `default.yaml`) and run
+with `-p acme`. A profile kept somewhere else works with its path: `-p ./acme.yaml`.
+Every option is explained in the comments inside `default.yaml`.
 
-You can run with `-print-profile` to prints all options with comments; `-profiles` lists saved profiles.
+`-profiles` shows what each profile does:
+
+```
+$ log_anonimizer -profiles
+profiles in ~/.config/log_anonimizer/profiles
+  default  sensitive_terms: (none)            public IPs: hidden  map: encrypted
+  acme     sensitive_terms: acme, acme.co.th  public IPs: kept    map: encrypted
+```
 
 Profile folder: `%AppData%\log_anonimizer\profiles` (Windows),
 `~/.config/log_anonimizer/profiles` (Linux), `~/Library/Application Support/log_anonimizer/profiles` (macOS).
