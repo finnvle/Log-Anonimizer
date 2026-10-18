@@ -32,11 +32,11 @@ Rename the file to `log_anonimizer` (`log_anonimizer.exe` on Windows).
 ## Usage
 
 ```
-log_anonimizer                  wizard: pick options with arrow keys and Space
-log_anonimizer -a export.csv    anonymize  -> export.anon.csv + export.anonmap
-log_anonimizer -d export.anon.csv   restore -> export.restored.csv
-log_anonimizer -show export.anon.csv    which token is which real value
-log_anonimizer -verify export.anon.csv -m export.anonmap   check before sharing
+log_anonimizer  # wizard: pick options with arrow keys and Space
+log_anonimizer -a export.csv    # anonymize  -> export.anon.csv + export.anonmap
+log_anonimizer -d export.anon.csv   # restore -> export.restored.csv
+log_anonimizer -show export.anon.csv    # which token is which real value
+log_anonimizer -verify export.anon.csv -m export.anonmap   # check before sharing
 ```
 
 `-a` and `-d` also take a folder (e.g. a KAPE triage). `-d` works on any text with tokens,
